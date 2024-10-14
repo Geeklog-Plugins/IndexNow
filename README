@@ -1,0 +1,60 @@
+IndexNow Plugin Installation and Configuration Guide
+
+Step 1: Download and Install the Plugin
+
+1. Download the Plugin: Ensure you have the latest version of the IndexNow plugin.
+2. Upload Plugin Files: Upload the plugin files to the following directory in your Geeklog installation:
+   /path/to/your/geeklog/plugins/
+3. Install the Plugin via Admin Panel:
+   - Navigate to your Geeklog Admin Panel at:
+     https://yourdomain.com/admin/plugins.php
+   - Locate IndexNow Plugin in the list and click "Install."
+   - The plugin will be installed with its default configuration.
+
+Step 2: Generate an IndexNow Key
+
+To utilize the IndexNow protocol, you must generate a unique API key. Follow these steps:
+
+1. Go to the IndexNow Key Generation Page:
+   Visit Bing's IndexNow key creation page at:
+   https://www.bing.com/webmasters/indexnow
+   - Log in to your account or create one if necessary.
+   - Generate your unique IndexNow key following the instructions provided on the page.
+
+2. Create and Host the Key File:
+   - Once you have the key, create a text file (e.g., your-key.txt) that contains only the key.
+   - Upload this file to the root directory of your website, such as:
+     https://yourdomain.com/your-key.txt
+
+Step 3: Configure the Plugin
+
+1. Access Plugin Configuration:
+   In your Geeklog Admin Panel, go to:
+   https://yourdomain.com/admin/configuration.php
+   Then, select the IndexNow plugin configuration.
+
+2. Enter the IndexNow Key:
+   - Find the field labeled IndexNow key.
+   - Paste the key you generated from Bing into this field.
+
+3. Save the Configuration:
+   - Once you’ve entered the key, save your changes.
+
+Step 4: Verify and Test
+
+1. Check Key File Accessibility:
+   - Open a browser and navigate to your key file location to verify that it is publicly accessible:
+     https://yourdomain.com/your-key.txt
+   - Ensure the file contains your key and can be accessed by Bing.
+
+2. Monitor URL Submissions:
+   - The plugin automatically submits URLs to IndexNow when you create, update, or delete content on your website.
+   - To verify submissions, visit the Bing Webmaster Tools dashboard at:
+     https://www.bing.com/webmasters/
+
+Conclusion
+
+The IndexNow plugin is now installed and configured. Your website will automatically notify search engines of new, updated, or deleted content, improving the speed and accuracy of indexing.
+
+For additional help, visit the Bing Webmaster Tools documentation:
+https://www.bing.com/webmasters/indexnow
