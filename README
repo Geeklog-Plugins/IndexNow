@@ -3,8 +3,7 @@ IndexNow Plugin Installation and Configuration Guide
 Step 1: Download and Install the Plugin
 
 1. Download the Plugin: Ensure you have the latest version of the IndexNow plugin.
-2. Upload Plugin Files: Upload the plugin files to the following directory in your Geeklog installation:
-   /path/to/your/geeklog/plugins/
+2. Upload Plugin Files: Upload the plugin files to the following directory in your Geeklog installation: /path/to/your/geeklog/plugins/. Then move the files from the plugin’s admin folder to: /path/to/your/geeklog/public_html/admin/plugins/indexnow/
 3. Install the Plugin via Admin Panel:
    - Navigate to your Geeklog Admin Panel at:
      https://yourdomain.com/admin/plugins.php
