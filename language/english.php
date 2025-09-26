@@ -45,4 +45,21 @@ $LANG_configselects['indexnow'] = array(
     0 => array('True' => 1, 'False' => 0),
     1 => array('True' => TRUE, 'False' => FALSE)
 );
+
+// Language for plugin users
+$LANG_indexnow = array(
+    'plugin_name'             => 'IndexNow',
+    'submit_success'          => 'Successfully submitted %d articles to Bing.',
+    'submit_error'            => 'An error occurred while submitting articles.',
+    'submit_to_bing'          => 'Submit to Bing',
+    'submit_first_batch'      => 'Click the button below to submit the first batch of %d articles.',
+    'submit_next_batch_message' => 'Click the button below to submit the next batch of %d articles. %d articles remaining.',
+    'no_articles_to_submit'   => 'No more articles to submit.',
+    'articles_submitted'      => 'Articles submitted: %d to %d.',
+    'loading_message'         => 'Submitting articles, please wait...',
+    'total_articles'          => 'Total articles available for submission: %d.',
+    'no_articles_remaining'   => 'All articles have been submitted. No articles remaining.',
+);
+
+
 ?>
