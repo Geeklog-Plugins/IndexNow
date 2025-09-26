@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | hello Plugin 1.0.0                                                        |
+// | IndexNow Plugin 1.0.0                                                     |
 // +---------------------------------------------------------------------------+
 // | functions.inc                                                             |
 // |                                                                           |
@@ -79,6 +79,47 @@ function plugin_autouninstall_indexnow()
 }
 
 /**
+ * Add the IndexNow plugin to the Command and Control block on moderation.php.
+ *
+ * @return array Array containing (plugin name, admin url, url of plugin icon) or an empty string.
+ */
+function plugin_cclabel_indexnow() {
+    global $_CONF, $LANG_indexnow;
+
+    if (SEC_hasRights('indexnow.admin')) {
+        return array(
+            $LANG_indexnow['plugin_name'], // Nom du plugin
+            $_CONF['site_admin_url'] . '/plugins/indexnow/index.php', // Lien vers la page admin
+            $_CONF['site_admin_url'] . '/plugins/indexnow/indexnow.png' // Icône du plugin (optionnel, remplacez par le chemin correct)
+        );
+    }
+
+    return ''; // Si l'utilisateur n'a pas les droits, ne rien afficher
+}
+
+
+/**
+ * Add the IndexNow plugin to the Admin menu.
+ *
+ * @return array Array containing (plugin name, plugin admin url, # of items in plugin or empty string).
+ */
+function plugin_getadminoption_indexnow() {
+    global $_CONF, $LANG_indexnow;
+
+    if (SEC_hasRights('indexnow.admin')) {
+        return array(
+            $LANG_indexnow['plugin_name'], // Nom du plugin
+            $_CONF['site_admin_url'] . '/plugins/indexnow/index.php', // URL de la page admin
+            '' // Nombre d'éléments spécifiques ou vide si non applicable
+        );
+    }
+
+    return ''; // Si l'utilisateur n'a pas les droits, ne rien afficher
+}
+
+
+
+/**
  * Handle the event when an article or static page is saved.
  * The function checks if the content is a draft or scheduled for future publication,
  * and sends the URL to the IndexNow API if it's eligible.
@@ -111,12 +152,12 @@ function plugin_itemsaved_indexnow($id, $type) {
 
         // If the article is not a draft and the date is valid, construct the URL
         if ($_CONF['url_rewrite']) {
-            $url = $_CONF['site_url'] . "/article/$id";
+            $url = $_CONF['site_url'] . "/article.php/$id";
         } else {
             $url = $_CONF['site_url'] . "/article.php?story=$id";
         }
 
-    } elseif ($type === 'staticpage') {
+    } elseif ($type === 'staticpages') {
         // Query to check if the static page is in draft mode
         $sql = "SELECT draft_flag FROM {$_TABLES['staticpage']} WHERE sp_id = '$id'";
         $result = DB_query($sql);
@@ -188,6 +229,66 @@ function send_to_indexnow($url) {
     }
 
     return $response;
+}
+
+/**
+ * Submit articles to IndexNow by descending date order.
+ * This function retrieves articles sorted by date in descending order
+ * and submits their URLs to the IndexNow API.
+ *
+ * @param int $limit  Number of articles to process in one batch.
+ * @param int $offset Offset to start retrieving articles.
+ * @return int        Number of articles submitted.
+ */
+function submit_articles_by_date_desc_to_indexnow($limit = 1, $offset = 0) {
+    global $_CONF, $_TABLES;
+
+    $urls = [];
+
+    // Requête SQL : trie par date décroissante et utilise offset pour sélectionner le bon lot
+    $sql = "SELECT sid, date 
+            FROM {$_TABLES['stories']} 
+            WHERE draft_flag = 0 
+            AND UNIX_TIMESTAMP(date) <= UNIX_TIMESTAMP(NOW()) 
+            ORDER BY date DESC 
+            LIMIT $offset, $limit";
+    $result = DB_query($sql);
+
+    // Récupérer les URLs des articles
+    while ($A = DB_fetchArray($result)) {
+        // Construire l'URL de l'article
+        if ($_CONF['url_rewrite']) {
+            $urls[] = $_CONF['site_url'] . "/article.php/" . $A['sid'];
+        } else {
+            $urls[] = $_CONF['site_url'] . "/article.php?story=" . $A['sid'];
+        }
+    }
+
+    // Soumettre chaque URL à IndexNow
+    foreach ($urls as $url) {
+        send_to_indexnow($url);
+        usleep(500000); // Pause de 500 ms pour limiter les requêtes
+    }
+
+    // Enregistrer dans les logs
+    $submitted_count = count($urls);
+    COM_errorLog("IndexNow: Submitted $submitted_count articles (offset: $offset, limit: $limit).");
+
+    return $submitted_count;
+}
+
+function get_total_articles_to_submit() {
+    global $_TABLES;
+
+    // Requête pour compter les articles non soumis (draft_flag = 0)
+    $sql = "SELECT COUNT(*) AS total 
+            FROM {$_TABLES['stories']} 
+            WHERE draft_flag = 0 
+            AND UNIX_TIMESTAMP(date) <= UNIX_TIMESTAMP(NOW())";
+    $result = DB_query($sql);
+    $A = DB_fetchArray($result);
+
+    return intval($A['total']);
 }
 
 ?>
