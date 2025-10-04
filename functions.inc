@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.0.0                                                     |
+// | IndexNow Plugin 1.0.1                                                     |
 // +---------------------------------------------------------------------------+
 // | functions.inc                                                             |
 // |                                                                           |
@@ -125,7 +125,7 @@ function plugin_getadminoption_indexnow() {
  * and sends the URL to the IndexNow API if it's eligible.
  *
  * @param string $id   The ID of the saved content.
- * @param string $type The type of content (article or staticpage).
+ * @param string $type The type of content (article, staticpage or topic).
  */
 function plugin_itemsaved_indexnow($id, $type) {
     global $_CONF, $_TABLES;
@@ -174,6 +174,10 @@ function plugin_itemsaved_indexnow($id, $type) {
         } else {
             $url = $_CONF['site_url'] . "/staticpages/index.php?page=$id";
         }
+
+    } elseif ($type === 'topic') {
+        // Topics never use rewritten URLs in Geeklog
+        $url = $_CONF['site_url'] . "/index.php?topic=$id";
 
     } else {
         // If the content type is not supported, log an error
@@ -289,6 +293,54 @@ function get_total_articles_to_submit() {
     $A = DB_fetchArray($result);
 
     return intval($A['total']);
+}
+
+/**
+ * Geeklog scheduled task for IndexNow.
+ * Submits all new stories and staticpages created in the last 24 hours.
+ */
+function plugin_runScheduledTask_indexnow() {
+    global $_TABLES, $_CONF;
+
+    $urls = [];
+
+    // ---- Stories published in the last 24 hours ----
+    $sql = "SELECT sid FROM {$_TABLES['stories']}
+            WHERE draft_flag = 0
+            AND UNIX_TIMESTAMP(date) >= UNIX_TIMESTAMP(NOW() - INTERVAL 1 DAY)";
+    $result = DB_query($sql);
+
+    while ($A = DB_fetchArray($result)) {
+        if ($_CONF['url_rewrite']) {
+            $urls[] = $_CONF['site_url'] . "/article.php/" . $A['sid'];
+        } else {
+            $urls[] = $_CONF['site_url'] . "/article.php?story=" . $A['sid'];
+        }
+    }
+
+    // ---- Staticpages created in the last 24 hours ----
+    $sql = "SELECT sp_id FROM {$_TABLES['staticpage']}
+            WHERE draft_flag = 0
+            AND UNIX_TIMESTAMP(created) >= UNIX_TIMESTAMP(NOW() - INTERVAL 1 DAY)";
+    $result = DB_query($sql);
+
+    while ($A = DB_fetchArray($result)) {
+        if ($_CONF['url_rewrite']) {
+            $urls[] = $_CONF['site_url'] . "/page.php/" . $A['sp_id'];
+        } else {
+            $urls[] = $_CONF['site_url'] . "/page.php?page=" . $A['sp_id'];
+        }
+    }
+
+    // ---- Submit each URL using the existing function ----
+    foreach ($urls as $url) {
+        send_to_indexnow($url);
+        usleep(500000); // 0.5s pause to avoid flooding
+    }
+
+    COM_errorLog("IndexNow scheduled task: submitted " . count($urls) . " URLs from the last 24h.", 1);
+
+    return true;
 }
 
 ?>
