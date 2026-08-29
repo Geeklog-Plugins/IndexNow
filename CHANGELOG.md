@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0
+
+- Add generic Geeklog content lifecycle support through `PLG_itemSaved()` and `PLG_itemDeleted()`.
+- Resolve plugin-owned canonical URLs through `PLG_getItemInfo()` with `plugin_idtourl_*()` fallback.
+- Support namespaced plugin identifiers such as `maps / marker:123` while keeping Geeklog 2.1.1 compatibility.
+- Submit generic plugin deletions after deterministic URL resolution.
+- Add compatibility for one-argument and subtype-aware two-argument `plugin_idtourl_*()` callbacks.
+- Add the `indexnow_submissions` history table.
+- Record automatic saves, deletions, manual batches and scheduled submissions with URL, event, HTTP code, status, message and timestamp.
+- Record `skipped` attempts when an URL is resolved but no IndexNow key is configured.
+- Add a Recent submissions table to the administration dashboard.
+- Add configurable submission-history retention: 30, 90, 180, 365 days or Unlimited; default 90 days.
+- Add `indexnow_get_last_submission($type, $id)` for future consumers such as Hub without coupling IndexNow directly to Hub.
+- Add an installable archive workflow and `dist/` package generation.
+- Preserve Geeklog 2.1.1 through 2.2.2 and PHP 5.6 through 8.1 modernization compatibility.
+
 ## 1.1.6
 
 - Stack the configuration and manual-submission cards vertically.

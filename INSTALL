@@ -2,67 +2,74 @@
 
 ## Overview
 
-The **IndexNow** plugin for Geeklog allows your website to instantly notify search engines (like Bing) when your content is created, updated, or deleted. This improves the speed and accuracy of indexing for your site, saving crawler bandwidth and making your newest content visible faster.
-
-## Features
-
-- **Automated Pinging**: Automatically sends new URLs to IndexNow when an article or static page is saved.
-- **Support for Deletions**: Notifies IndexNow when content is deleted to remove it from search engine indexes.
-- **Batch Submission**: Allows administrators to manually submit batches of existing URLs from the Geeklog administration panel.
-- **Debug Mode**: Toggleable debug logging to `error.log` for monitoring IndexNow API responses.
-- **Geeklog 2.2.2 Native API**: Fully uses the modern configuration API without custom database tables.
+The IndexNow plugin automatically notifies IndexNow-compatible search engines when Geeklog content is created, updated, or deleted. Version 1.2.0 adds generic plugin-content interoperability and persistent submission history.
 
 ## Installation
 
-### Step 1: Download and Install the Plugin
+1. Upload the installable ZIP from `dist/` through Geeklog's plugin administration, or copy the `indexnow` directory to Geeklog's `/plugins/` directory and install it from `/admin/plugins.php`.
+2. Geeklog creates the plugin administration group, configuration, and the `indexnow_submissions` table using the current site's database prefix.
+3. Generate an IndexNow key from Bing Webmaster Tools / IndexNow.
+4. Create the public key verification file in the site root. The file must contain only the configured key.
+5. Open Geeklog Configuration → IndexNow and configure:
+   - IndexNow key;
+   - Debug Mode;
+   - Submission history retention: 30, 90, 180, 365 days or Unlimited.
 
-1. Download the plugin archive (`.zip`).
-2. Navigate to your Geeklog Admin Panel at: `https://yourdomain.com/admin/plugins.php`
-3. Use the plugin uploader to upload and install the plugin directly from the zip file.
-4. *Alternatively*, if installing manually: Upload the `indexnow` folder into the `/plugins/` directory of your Geeklog installation, then install it from `/admin/plugins.php`. **You do not need to move any files manually**; the directory structure is preserved natively.
+The default history retention is 90 days.
 
-### Step 2: Generate an IndexNow Key
+## Upgrade from 1.1.x
 
-To utilize the IndexNow protocol, you must generate a unique API key. Follow these steps:
+Use Geeklog's normal plugin upgrade process. Version 1.2.0 automatically:
 
-1. **Go to the IndexNow Key Generation Page**:
-   Visit Bing's IndexNow key creation page at:
-   https://www.bing.com/webmasters/indexnow
-   - Log in to your account or create one if necessary.
-   - Generate your unique IndexNow key following the instructions provided on the page.
+- creates the prefixed `indexnow_submissions` table if it does not already exist;
+- adds the `history_retention_days` configuration entry with a default of 90 days;
+- updates the plugin version to 1.2.0.
 
-2. **Create and Host the Key File**:
-   - Once you have the key, create a text file (e.g., `your-key.txt`) that contains only the key inside.
-   - Upload this file to the root directory of your website, making it accessible at `https://yourdomain.com/your-key.txt`.
+Existing IndexNow configuration and keys are preserved.
 
-### Step 3: Configure the Plugin
+## What is recorded
 
-1. **Access Plugin Configuration**:
-   In your Geeklog Admin Panel, go to:
-   `https://yourdomain.com/admin/configuration.php`
-   Select the **IndexNow** section.
+The submission history stores automatic saves, deletions, manual submissions and scheduled submissions. It records the Geeklog content identity when available, canonical URL, whether an HTTP request was attempted, HTTP status, result status, message and timestamp.
 
-2. **Enter the IndexNow Key**:
-   - Paste the key you generated from Bing into the `IndexNow key` field.
-   - You can also enable or disable **Debug Mode** here.
+`success` means IndexNow returned HTTP 200 or 202. `failed` records resolution or transport/API failures. `skipped` records a resolved URL that was not sent because no IndexNow key was configured.
 
-3. **Save the Configuration**.
+## Generic plugin support
 
-### Step 4: Verify and Test
+Content plugins should expose their canonical URLs through the Geeklog interoperability model:
 
-1. **Check Key File Accessibility**:
-   Open a browser and navigate to your key file location to verify that it is publicly accessible and returns the key as plain text.
+```text
+PLG_getItemInfo(type, id, 'url', ...)
+```
 
-2. **Monitor URL Submissions**:
-   - The plugin automatically submits URLs when you publish or delete content.
-   - If Debug Mode is ON, you can check `logs/error.log` for successful submission messages.
-   - To verify submissions in production, visit the Bing Webmaster Tools dashboard.
+and, especially for deterministic URL resolution after deletion, may expose:
 
-## Administration
+```text
+plugin_idtourl_PLUGIN(...)
+```
 
-You can manually trigger submissions of old articles to IndexNow by visiting the IndexNow administration screen in Geeklog.
+IndexNow supports both one-argument legacy URL callbacks and subtype-aware two-argument callbacks.
+
+Example Maps identifiers:
+
+```text
+type = maps, id = 2
+type = maps, id = marker:123
+```
+
+## Verification
+
+Open the IndexNow administration page after saving or deleting content. The **Recent submissions** section shows the latest attempts, including status and HTTP response code.
+
+Debug Mode can additionally write detailed diagnostic messages to Geeklog's native `logs/error.log`.
+
+## Requirements
+
+- Geeklog 2.1.1 through 2.2.2
+- PHP 5.6 through PHP 8.1 for the current modernization target
+- PHP cURL extension
+- MySQL/MariaDB database supported by Geeklog
 
 ## Credits
 
-Copyright (C) 2024-2026
+Copyright (C) 2024-2026  
 Author: Ben (hostellerie.org AT gmail DOT com)
