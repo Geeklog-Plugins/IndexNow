@@ -9,6 +9,10 @@
 - Explicitly enable TLS peer and host verification for IndexNow cURL requests and restrict protocols to HTTPS where supported.
 - Submit scheduled URLs in batches of up to 100 instead of one HTTP request per item.
 - Preserve per-item type, ID and event metadata when manual and scheduled batch submissions are recorded in submission history.
+- Prevent automatic, manual and scheduled disclosure of private Geeklog articles, static pages and topics by checking anonymous read permissions and topic permissions before submission.
+- Resolve plugin-owned URLs through permission-aware `PLG_getItemInfo(..., uid=1)` calls and fail closed when anonymous accessibility cannot be verified.
+- When previously public content becomes private, request one final recrawl using only an URL that was already successfully submitted while public.
+- Submit deleted URLs only when submission history proves that the URL had previously been successfully submitted while public.
 - Harden the release workflow and generate a SHA-256 checksum alongside the installable archive.
 
 ## 1.2.0
