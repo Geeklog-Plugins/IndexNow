@@ -2,13 +2,18 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.2.0                                                     |
+// | IndexNow Plugin 1.2.1                                                     |
 // +---------------------------------------------------------------------------+
 // | install_updates.php                                                       |
 // +---------------------------------------------------------------------------+
 
 if (strpos(strtolower($_SERVER['PHP_SELF']), 'install_updates.php') !== false) {
     die('This file cannot be used on its own!');
+}
+
+// Load remediation helpers after all core plugin functions have been declared.
+if (isset($_CONF['path'])) {
+    require_once $_CONF['path'] . 'plugins/indexnow/cleanup.php';
 }
 
 function indexnow_update_ConfValues_1_1_0()
@@ -68,8 +73,6 @@ function indexnow_update_ConfigSecurity_1_1_1()
 
 /**
  * Return whether the IndexNow submission history table exists.
- *
- * @return bool
  */
 function indexnow_submission_table_exists()
 {
@@ -134,6 +137,55 @@ function indexnow_update_1_2_0()
     return true;
 }
 
+/**
+ * Create the 1.2.1 cleanup queue and perform the local security audit.
+ * This routine never performs an external HTTP request.
+ *
+ * @param bool $legacyUnverifiable Whether the previous version predates 1.2.0
+ * @return bool
+ */
+function indexnow_update_1_2_1($legacyUnverifiable = false)
+{
+    global $_TABLES, $_DB_table_prefix;
+
+    if (!isset($_TABLES['indexnow_cleanup']) || $_TABLES['indexnow_cleanup'] === '') {
+        $_TABLES['indexnow_cleanup'] = $_DB_table_prefix . 'indexnow_cleanup';
+    }
+
+    if (!indexnow_cleanup_table_exists()) {
+        $table = $_TABLES['indexnow_cleanup'];
+        DB_query("CREATE TABLE IF NOT EXISTS {$table} (
+          cleanup_id int(10) unsigned NOT NULL auto_increment,
+          cleanup_key char(40) NOT NULL default '',
+          item_type varchar(64) NOT NULL default '',
+          item_id varchar(255) NOT NULL default '',
+          item_subtype varchar(64) NOT NULL default '',
+          url text NOT NULL,
+          reason varchar(64) NOT NULL default '',
+          status varchar(32) NOT NULL default 'pending',
+          attempts tinyint(3) unsigned NOT NULL default '0',
+          last_http_code smallint(5) unsigned NOT NULL default '0',
+          message text NOT NULL,
+          created_at datetime NOT NULL,
+          updated_at datetime NOT NULL,
+          processed_at datetime NULL,
+          PRIMARY KEY (cleanup_id),
+          UNIQUE KEY cleanup_key (cleanup_key),
+          KEY status (status),
+          KEY item_lookup (item_type,item_id(100))
+        ) ENGINE=MyISAM");
+        if (DB_error() || !indexnow_cleanup_table_exists()) {
+            return false;
+        }
+    }
+
+    // The audit is intentionally local-only. Only URLs proven by the history
+    // to have been submitted successfully may enter the remediation queue.
+    indexnow_audit_submitted_urls((bool) $legacyUnverifiable);
+
+    return true;
+}
+
 function plugin_upgrade_indexnow()
 {
     global $_TABLES;
@@ -141,9 +193,7 @@ function plugin_upgrade_indexnow()
     $installed_version = DB_getItem($_TABLES['plugins'], 'pi_version', "pi_name = 'indexnow'");
     $code_version = plugin_chkVersion_indexnow();
 
-    // 1.2.0 introduced a database table. Always verify it, even when the
-    // plugin version is already recorded as 1.2.0 (for example after files
-    // were replaced before Geeklog's upgrade routine was run).
+    // 1.2.0 introduced the submission-history table. Always verify it first.
     if (version_compare($code_version, '1.2.0', '>=')) {
         if (!indexnow_update_1_2_0()) {
             return false;
@@ -151,6 +201,11 @@ function plugin_upgrade_indexnow()
     }
 
     if ($installed_version == $code_version) {
+        // Also self-heal the 1.2.1 cleanup table if files were replaced before
+        // Geeklog's upgrade routine ran.
+        if (version_compare($code_version, '1.2.1', '>=')) {
+            return indexnow_update_1_2_1(false);
+        }
         return true;
     }
 
@@ -162,6 +217,13 @@ function plugin_upgrade_indexnow()
 
     if (!indexnow_update_ConfigSecurity_1_1_1()) {
         return false;
+    }
+
+    if (version_compare($code_version, '1.2.1', '>=')) {
+        $legacyUnverifiable = version_compare($installed_version, '1.2.0', '<');
+        if (!indexnow_update_1_2_1($legacyUnverifiable)) {
+            return false;
+        }
     }
 
     DB_query("UPDATE {$_TABLES['plugins']} SET " .
