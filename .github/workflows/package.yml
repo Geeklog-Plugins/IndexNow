@@ -47,7 +47,12 @@ jobs:
           grep -q 'function indexnow_apply_curl_security' functions.inc
           grep -q 'batchSize = 100' functions.inc
           grep -q 'function indexnow_record_submission' submission_history.php
+          grep -q 'function indexnow_process_cleanup_if_scheduled' submission_history.php
+          grep -q 'function indexnow_audit_submitted_urls' cleanup.php
+          grep -q 'function indexnow_process_cleanup_queue' cleanup.php
+          grep -q 'function indexnow_update_1_2_1' install_updates.php
           grep -q 'indexnow_submissions' sql/mysql_install.php
+          grep -q 'indexnow_cleanup' sql/mysql_install.php
 
       - name: Build installable archive
         shell: bash
@@ -61,6 +66,7 @@ jobs:
             language \
             sql \
             autoinstall.php \
+            cleanup.php \
             configuration_validation.php \
             functions.inc \
             submission_history.php \
