@@ -19,6 +19,8 @@
 - Record remediation requests in submission history with the `cleanup` event.
 - Add a Security cleanup administration panel with queue statistics, last-audit information and a CSRF-protected manual re-audit action.
 - Mark upgrades from pre-1.2.0 releases as `legacy_unverifiable` when exact historical submissions cannot be reconstructed; unknown private URLs are never sent merely to guess what may have been submitted.
+- Detect Geeklog XMLSitemap's optional native IndexNow support in the administration dashboard and warn when both providers are enabled, recommending that only XMLSitemap's IndexNow option be disabled while sitemap generation remains active.
+- Never modify XMLSitemap configuration automatically; coexistence diagnostics are advisory and preserve clear plugin responsibility boundaries.
 - Harden the release workflow and generate a SHA-256 checksum alongside the installable archive.
 
 ## 1.2.0
@@ -30,7 +32,7 @@
 - Add compatibility for one-argument and subtype-aware two-argument `plugin_idtourl_*()` callbacks.
 - Add the `indexnow_submissions` history table.
 - Record automatic saves, deletions, manual batches and scheduled submissions with URL, event, HTTP code, status, message and timestamp.
-- Record `skipped` attempts when an URL is resolved but no IndexNow key is configured.
+- Record `skipped` attempts when an URL is resolved but no usable IndexNow key is configured.
 - Add a Recent submissions table to the administration dashboard.
 - Add configurable submission-history retention: 30, 90, 180, 365 days or Unlimited; default 90 days.
 - Add `indexnow_get_last_submission($type, $id)` for future consumers such as Hub without coupling IndexNow directly to Hub.
