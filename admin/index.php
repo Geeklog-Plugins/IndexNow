@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.2.0                                                     |
+// | IndexNow Plugin 1.2.1                                                     |
 // +---------------------------------------------------------------------------+
 // | admin/index.php                                                           |
 // +---------------------------------------------------------------------------+
@@ -24,9 +24,6 @@ if (!SEC_hasRights('indexnow.admin')) {
 require_once $_CONF['path'] . 'plugins/indexnow/functions.inc';
 require_once $_CONF['path_system'] . 'lib-admin.php';
 
-/**
- * Render one field in the native Geeklog submission-history list.
- */
 function INDEXNOW_getSubmissionListField($fieldName, $fieldValue, $A, $iconArray)
 {
     global $LANG_indexnow;
@@ -91,9 +88,6 @@ function INDEXNOW_getSubmissionListField($fieldName, $fieldValue, $A, $iconArray
     }
 }
 
-/**
- * Build native Geeklog filters for the submission history.
- */
 function INDEXNOW_submissionFilters(&$defaultFilter, &$pageNavUrl)
 {
     global $_TABLES, $LANG_indexnow;
@@ -103,7 +97,7 @@ function INDEXNOW_submissionFilters(&$defaultFilter, &$pageNavUrl)
     $type = isset($_REQUEST['ixn_type']) ? COM_applyFilter($_REQUEST['ixn_type']) : 'all';
 
     $allowedStatuses = array('all', 'success', 'failed', 'skipped');
-    $allowedEvents = array('all', 'saved', 'deleted', 'manual', 'scheduled');
+    $allowedEvents = array('all', 'saved', 'deleted', 'manual', 'scheduled', 'cleanup');
     if (!in_array($status, $allowedStatuses, true)) {
         $status = 'all';
     }
@@ -144,7 +138,8 @@ function INDEXNOW_submissionFilters(&$defaultFilter, &$pageNavUrl)
         'saved' => 'Saved',
         'deleted' => 'Deleted',
         'manual' => 'Manual',
-        'scheduled' => 'Scheduled'
+        'scheduled' => 'Scheduled',
+        'cleanup' => 'Cleanup'
     );
 
     $filter = '<div class="ixn-native-filters">';
@@ -164,9 +159,6 @@ function INDEXNOW_submissionFilters(&$defaultFilter, &$pageNavUrl)
     return $filter;
 }
 
-/**
- * Render the full searchable, sortable, paginated submission history.
- */
 function INDEXNOW_submissionHistoryList()
 {
     global $_CONF, $_TABLES, $LANG_indexnow;
@@ -218,6 +210,14 @@ function INDEXNOW_submissionHistoryList()
 }
 
 indexnow_purge_submission_history();
+
+// Self-heal the cleanup table if plugin files were replaced before Geeklog ran
+// the formal upgrade routine. This remains local-only and performs no HTTP call.
+if (function_exists('indexnow_cleanup_table_exists') && !indexnow_cleanup_table_exists() &&
+    function_exists('indexnow_update_1_2_1')) {
+    indexnow_update_1_2_1(false);
+}
+
 $key_status = indexnow_get_key_status();
 $debug_enabled = isset($_INDEXNOW_CONF['debug_mode']) && (int) $_INDEXNOW_CONF['debug_mode'] === 1;
 $retention_days = isset($_INDEXNOW_CONF['history_retention_days']) ? (int) $_INDEXNOW_CONF['history_retention_days'] : 90;
@@ -232,6 +232,21 @@ $feedback = '';
 $submitted_range = '';
 $next_action_message = '';
 $next_offset = $offset;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_security_audit']) && SEC_checkToken()) {
+    try {
+        $audit = indexnow_audit_submitted_urls(false);
+        $feedback = COM_showMessageText(
+            sprintf($LANG_indexnow['cleanup_run_success'], $audit['audited'], $audit['queued']),
+            $LANG_indexnow['cleanup_title']
+        );
+    } catch (Exception $e) {
+        $feedback = COM_showMessageText(
+            $LANG_indexnow['submit_error'] . ' ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'),
+            $LANG_indexnow['cleanup_title']
+        );
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_articles']) && SEC_checkToken()) {
     try {
@@ -258,6 +273,10 @@ if ($offset === 0 && empty($feedback)) {
 } else {
     $next_action_message = $LANG_indexnow['no_articles_remaining'];
 }
+
+$cleanup_stats = function_exists('indexnow_cleanup_get_stats')
+    ? indexnow_cleanup_get_stats()
+    : array('pending' => 0, 'completed' => 0, 'failed' => 0, 'review' => 0, 'last_audit' => '', 'last_audit_message' => '');
 
 $display = '<style>
 .ixn-card{box-sizing:border-box;width:100%;margin-bottom:18px;padding:18px 20px;border:1px solid #dfe3e8;border-radius:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)}
@@ -330,6 +349,35 @@ if (!$submission_ready) {
 $display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '" onsubmit="indexnowSubmissionLoading()"><input type="hidden" name="offset" value="' . $next_offset . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '">';
 $display .= '<button type="submit" id="submit-button" name="submit_articles" class="ixn-button"' . ($submission_ready ? '' : ' disabled="disabled"') . '>' . $LANG_indexnow['submit_to_bing'] . '</button></form>';
 $display .= '<p id="loading-message" class="ixn-muted" style="display:none">' . $LANG_indexnow['loading_message'] . '</p></section>';
+
+$display .= '<section class="ixn-card"><h2>' . $LANG_indexnow['cleanup_title'] . '</h2>';
+$display .= '<p>' . $LANG_indexnow['cleanup_intro'] . '</p><dl class="ixn-details">';
+$display .= '<dt>' . $LANG_indexnow['cleanup_pending'] . '</dt><dd>' . (int) $cleanup_stats['pending'] . '</dd>';
+$display .= '<dt>' . $LANG_indexnow['cleanup_completed'] . '</dt><dd>' . (int) $cleanup_stats['completed'] . '</dd>';
+$display .= '<dt>' . $LANG_indexnow['cleanup_failed'] . '</dt><dd>' . (int) $cleanup_stats['failed'] . '</dd>';
+$display .= '<dt>' . $LANG_indexnow['cleanup_review'] . '</dt><dd>' . (int) $cleanup_stats['review'] . '</dd>';
+$display .= '<dt>' . $LANG_indexnow['cleanup_last_audit'] . '</dt><dd>';
+if ($cleanup_stats['last_audit'] !== '') {
+    $auditTimestamp = strtotime($cleanup_stats['last_audit']);
+    if ($auditTimestamp !== false) {
+        $auditDate = COM_getUserDateTimeFormat($auditTimestamp);
+        $display .= htmlspecialchars($auditDate[0], ENT_QUOTES, 'UTF-8');
+    } else {
+        $display .= htmlspecialchars($cleanup_stats['last_audit'], ENT_QUOTES, 'UTF-8');
+    }
+    if ($cleanup_stats['last_audit_message'] !== '') {
+        $display .= '<br><span class="ixn-muted">' . htmlspecialchars($cleanup_stats['last_audit_message'], ENT_QUOTES, 'UTF-8') . '</span>';
+    }
+} else {
+    $display .= $LANG_indexnow['cleanup_never_audited'];
+}
+$display .= '</dd></dl>';
+if ((int) $cleanup_stats['review'] > 0) {
+    $display .= '<div class="ixn-status ixn-warning">' . $LANG_indexnow['cleanup_legacy_warning'] . '</div>';
+}
+$display .= '<p class="ixn-muted">' . $LANG_indexnow['cleanup_schedule_help'] . '</p>';
+$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '">';
+$display .= '<button type="submit" name="run_security_audit" class="ixn-button">' . $LANG_indexnow['cleanup_run'] . '</button></form></section>';
 
 $display .= INDEXNOW_submissionHistoryList();
 $display .= '<details class="ixn-help"><summary>' . $LANG_indexnow['documentation'] . '</summary><div class="ixn-help-body">' . $LANG_indexnow['documentation_content'] . '</div></details>';
