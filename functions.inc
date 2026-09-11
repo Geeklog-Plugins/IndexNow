@@ -139,7 +139,7 @@ function indexnow_get_key_status()
 function plugin_autouninstall_indexnow()
 {
     return array(
-        'tables' => array('indexnow_submissions'),
+        'tables' => array('indexnow_submissions', 'indexnow_cleanup'),
         'groups' => array('IndexNow Admin'),
         'features' => array('indexnow.admin', 'config.indexnow.tab_main'),
         'php_blocks' => array(),
@@ -255,10 +255,6 @@ function indexnow_submission_context($type, $id, $sub_type, $event)
     );
 }
 
-/**
- * Check whether a core Geeklog item is readable by the anonymous user.
- * Item permissions and topic permissions are both enforced.
- */
 function indexnow_core_item_is_public($type, $id)
 {
     global $_TABLES;
@@ -288,11 +284,6 @@ function indexnow_core_item_is_public($type, $id)
     return ($result && DB_numRows($result) > 0);
 }
 
-/**
- * A previously successful submission proves that an URL was already public.
- * This is used to safely notify IndexNow when visibility is removed or an item
- * is deleted, without disclosing URLs that were private from the beginning.
- */
 function indexnow_was_previously_public($type, $id)
 {
     $last = indexnow_get_last_submission($type, $id);
@@ -408,8 +399,6 @@ function plugin_itemdeleted_indexnow($id, $type, $sub_type = '')
     $key = isset($_INDEXNOW_CONF['indexnow_key']) ? trim($_INDEXNOW_CONF['indexnow_key']) : '';
     $context = indexnow_submission_context($type, $id, $sub_type, 'deleted');
 
-    // Do not disclose an URL on deletion unless it had already been submitted
-    // successfully while public.
     $url = indexnow_previous_public_url($type, $id);
     if ($url === '') {
         indexnow_log("Deleted item not submitted because no previous public submission exists (type: $type, ID: $id).", true);
@@ -631,6 +620,9 @@ function plugin_runScheduledTask_indexnow()
 {
     global $_TABLES, $_CONF;
 
+    if (function_exists('indexnow_process_cleanup_queue')) {
+        indexnow_process_cleanup_queue(100);
+    }
     indexnow_purge_submission_history();
     $items = array();
 
