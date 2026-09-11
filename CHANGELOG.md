@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.1
+
+- Validate all submitted URLs before contacting IndexNow and reject non-HTTP(S), foreign-host, credential-bearing, control-character and unexpected-port URLs.
+- Validate IndexNow keys at runtime before any submission.
+- Restrict submission-history retention configuration to 0, 30, 90, 180 or 365 days.
+- Sanitize CR, LF and NUL characters before writing plugin messages to Geeklog's error log.
+- Explicitly enable TLS peer and host verification for IndexNow cURL requests and restrict protocols to HTTPS where supported.
+- Submit scheduled URLs in batches of up to 100 instead of one HTTP request per item.
+- Preserve per-item type, ID and event metadata when manual and scheduled batch submissions are recorded in submission history.
+- Prevent automatic, manual and scheduled disclosure of private Geeklog articles, static pages and topics by checking anonymous read permissions and topic permissions before submission.
+- Resolve plugin-owned URLs through permission-aware `PLG_getItemInfo(..., uid=1)` calls and fail closed when anonymous accessibility cannot be verified.
+- When previously public content becomes private, request a recrawl using only an URL that was already successfully submitted while public.
+- Submit deleted URLs only when submission history proves that the URL had previously been successfully submitted while public.
+- Add an `indexnow_cleanup` remediation queue for URLs that submission history proves were previously accepted by IndexNow but are now private, deleted or have a changed canonical URL.
+- Run a local-only security audit automatically during the 1.2.1 upgrade; the upgrade itself performs no external HTTP request.
+- Process pending remediation URLs automatically from the IndexNow scheduled task in batches of up to 100, retrying failures up to three times.
+- Call cleanup processing directly from `plugin_runScheduledTask_indexnow()` instead of relying on call-stack detection.
+- Record remediation requests in submission history with the `cleanup` event.
+- Add a Security cleanup administration panel with queue statistics, last-audit information, a CSRF-protected manual re-audit action and a manual "Run cleanup now" batch action.
+- Remove both `indexnow_submissions` and `indexnow_cleanup` tables during plugin uninstall.
+- Mark upgrades from pre-1.2.0 releases as `legacy_unverifiable` when exact historical submissions cannot be reconstructed; unknown private URLs are never sent merely to guess what may have been submitted.
+- Detect Geeklog XMLSitemap's optional native IndexNow support in the administration dashboard and warn when both providers are enabled, recommending that only XMLSitemap's IndexNow option be disabled while sitemap generation remains active.
+- Never modify XMLSitemap configuration automatically; coexistence diagnostics are advisory and preserve clear plugin responsibility boundaries.
+- Make the administration dashboard, submission-history status/event labels, cleanup messages and XMLSitemap coexistence guidance translatable through `language/english.php` instead of hardcoded display strings.
+- Keep only internal debug/log wording and protocol/product names in code; administrator-facing text is language-file driven.
+- Harden the release workflow and generate a SHA-256 checksum alongside the installable archive.
+
 ## 1.2.0
 
 - Add generic Geeklog content lifecycle support through `PLG_itemSaved()` and `PLG_itemDeleted()`.
@@ -9,7 +36,7 @@
 - Add compatibility for one-argument and subtype-aware two-argument `plugin_idtourl_*()` callbacks.
 - Add the `indexnow_submissions` history table.
 - Record automatic saves, deletions, manual batches and scheduled submissions with URL, event, HTTP code, status, message and timestamp.
-- Record `skipped` attempts when an URL is resolved but no IndexNow key is configured.
+- Record `skipped` attempts when an URL is resolved but no usable IndexNow key is configured.
 - Add a Recent submissions table to the administration dashboard.
 - Add configurable submission-history retention: 30, 90, 180, 365 days or Unlimited; default 90 days.
 - Add `indexnow_get_last_submission($type, $id)` for future consumers such as Hub without coupling IndexNow directly to Hub.

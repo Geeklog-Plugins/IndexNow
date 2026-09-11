@@ -5,6 +5,7 @@ on:
     branches:
       - generic-item-listener
       - main
+      - develop-1.2.1
   workflow_dispatch:
 
 permissions:
@@ -16,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
@@ -34,15 +35,31 @@ jobs:
         shell: bash
         run: |
           set -e
-          grep -q "'pi_version'.*'1.2.0'" autoinstall.php
+          grep -q "'pi_version'.*'1.2.1'" autoinstall.php
           grep -q "'pi_gl_version'.*'2.1.1'" autoinstall.php
-          grep -q 'IndexNow Plugin 1.2.0' functions.inc
           grep -q 'function plugin_itemsaved_indexnow' functions.inc
           grep -q 'function plugin_itemdeleted_indexnow' functions.inc
           grep -q 'function indexnow_resolve_saved_plugin_url' functions.inc
           grep -q 'function indexnow_resolve_deleted_plugin_url' functions.inc
+          grep -q 'function indexnow_validate_url' functions.inc
+          grep -q 'function indexnow_validate_key' functions.inc
+          grep -q 'function indexnow_sanitize_log_value' functions.inc
+          grep -q 'function indexnow_apply_curl_security' functions.inc
+          grep -q 'batchSize = 100' functions.inc
+          grep -q 'indexnow_process_cleanup_queue(100)' functions.inc
+          grep -q "'tables' => array('indexnow_submissions', 'indexnow_cleanup')" functions.inc
           grep -q 'function indexnow_record_submission' submission_history.php
+          ! grep -q 'indexnow_process_cleanup_if_scheduled' submission_history.php
+          grep -q 'function indexnow_audit_submitted_urls' cleanup.php
+          grep -q 'function indexnow_process_cleanup_queue' cleanup.php
+          grep -q 'function indexnow_update_1_2_1' install_updates.php
           grep -q 'indexnow_submissions' sql/mysql_install.php
+          grep -q 'indexnow_cleanup' sql/mysql_install.php
+          grep -q "'cleanup_run_now'" language/english.php
+          grep -q "'coexistence_title'" language/english.php
+          grep -q "'history_batch_accepted'" language/english.php
+          grep -q "\$LANG_indexnow\['cleanup_run_now'\]" admin/index.php
+          grep -q "\$LANG_indexnow\['coexistence_title'\]" admin/index.php
 
       - name: Build installable archive
         shell: bash
@@ -56,6 +73,7 @@ jobs:
             language \
             sql \
             autoinstall.php \
+            cleanup.php \
             configuration_validation.php \
             functions.inc \
             submission_history.php \
@@ -67,17 +85,19 @@ jobs:
             build/indexnow/
 
           cd build
-          zip -r indexnow_1.2.0_2.1.1.zip indexnow >/dev/null
-          unzip -t indexnow_1.2.0_2.1.1.zip >/dev/null
-          test "$(zipinfo -1 indexnow_1.2.0_2.1.1.zip | head -n 1)" = 'indexnow/'
+          zip -r indexnow_1.2.1_2.1.1.zip indexnow >/dev/null
+          unzip -t indexnow_1.2.1_2.1.1.zip >/dev/null
+          test "$(zipinfo -1 indexnow_1.2.1_2.1.1.zip | head -n 1)" = 'indexnow/'
+          sha256sum indexnow_1.2.1_2.1.1.zip > indexnow_1.2.1_2.1.1.zip.sha256
 
       - name: Commit archive to dist
         shell: bash
         run: |
           set -e
           mkdir -p dist
-          rm -f dist/indexnow_*.zip
-          cp build/indexnow_1.2.0_2.1.1.zip dist/indexnow_1.2.0_2.1.1.zip
+          rm -f dist/indexnow_*.zip dist/indexnow_*.zip.sha256
+          cp build/indexnow_1.2.1_2.1.1.zip dist/indexnow_1.2.1_2.1.1.zip
+          cp build/indexnow_1.2.1_2.1.1.zip.sha256 dist/indexnow_1.2.1_2.1.1.zip.sha256
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -88,5 +108,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m 'Build IndexNow 1.2.0 installable archive [skip ci]'
+          git commit -m 'Build IndexNow 1.2.1 installable archive [skip ci]'
           git push origin HEAD:${{ github.ref_name }}

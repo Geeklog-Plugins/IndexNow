@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.2.0                                                     |
+// | IndexNow Plugin 1.2.1                                                     |
 // +---------------------------------------------------------------------------+
 // | submission_history.php                                                    |
 // |                                                                           |
@@ -48,14 +48,6 @@ function indexnow_history_table_ready()
 
 /**
  * Record one IndexNow submission attempt.
- *
- * @param array  $context   item_type, item_id, item_subtype and event
- * @param string $url
- * @param bool   $submitted Whether an HTTP request was attempted
- * @param int    $httpCode
- * @param string $status    success, failed or skipped
- * @param string $message
- * @return bool
  */
 function indexnow_record_submission($context, $url, $submitted, $httpCode, $status, $message)
 {
@@ -90,12 +82,6 @@ function indexnow_record_submission($context, $url, $submitted, $httpCode, $stat
     return !DB_error();
 }
 
-/**
- * Return recent submission attempts for the administration dashboard.
- *
- * @param int $limit
- * @return array
- */
 function indexnow_get_recent_submissions($limit = 25)
 {
     global $_TABLES;
@@ -124,11 +110,6 @@ function indexnow_get_recent_submissions($limit = 25)
 
 /**
  * Return the latest recorded attempt for one Geeklog item.
- * This intentionally stays provider-neutral so Hub can consume it later.
- *
- * @param string $type
- * @param string $id
- * @return array
  */
 function indexnow_get_last_submission($type, $id)
 {
@@ -152,9 +133,6 @@ function indexnow_get_last_submission($type, $id)
 /**
  * Purge history according to the configured retention period.
  * A value of 0 means unlimited retention.
- *
- * @param int|null $days
- * @return int Number of rows deleted when available
  */
 function indexnow_purge_submission_history($days = null)
 {
@@ -183,8 +161,6 @@ function indexnow_purge_submission_history($days = null)
         return 0;
     }
 
-    // Geeklog 2.1.1 requires the query result/connection argument here.
-    // Passing it is also compatible with later Geeklog database wrappers.
     return function_exists('DB_affectedRows') ? (int) DB_affectedRows($result) : 0;
 }
 
