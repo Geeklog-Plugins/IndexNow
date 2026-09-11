@@ -211,8 +211,6 @@ function INDEXNOW_submissionHistoryList()
 
 indexnow_purge_submission_history();
 
-// Self-heal the cleanup table if plugin files were replaced before Geeklog ran
-// the formal upgrade routine. This remains local-only and performs no HTTP call.
 if (function_exists('indexnow_cleanup_table_exists') && !indexnow_cleanup_table_exists() &&
     function_exists('indexnow_update_1_2_1')) {
     indexnow_update_1_2_1(false);
@@ -278,23 +276,6 @@ $cleanup_stats = function_exists('indexnow_cleanup_get_stats')
     ? indexnow_cleanup_get_stats()
     : array('pending' => 0, 'completed' => 0, 'failed' => 0, 'review' => 0, 'last_audit' => '', 'last_audit_message' => '');
 
-$display = '<style>
-.ixn-card{box-sizing:border-box;width:100%;margin-bottom:18px;padding:18px 20px;border:1px solid #dfe3e8;border-radius:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.ixn-card h2{margin:0 0 14px;font-size:1.15em}.ixn-status{padding:11px 13px;border:1px solid;border-radius:6px;margin-bottom:14px}
-.ixn-ok{color:#1b5e20;background:#e8f5e9;border-color:#a5d6a7}.ixn-warning{color:#7a4f00;background:#fff8e1;border-color:#ffe082}.ixn-error{color:#b71c1c;background:#ffebee;border-color:#ef9a9a}
-.ixn-details{display:grid;grid-template-columns:minmax(150px,auto) 1fr;gap:7px 14px;margin:0}.ixn-details dt{font-weight:bold}.ixn-details dd{margin:0;min-width:0;overflow-wrap:anywhere}
-.ixn-actions{margin-top:16px}.ixn-button{display:inline-block;padding:9px 16px;border:0;border-radius:4px;background:#1678c2;color:#fff;cursor:pointer}.ixn-button[disabled]{background:#aeb7bf;cursor:not-allowed}
-.ixn-muted{color:#68737d}.ixn-success{color:#1b5e20;font-weight:bold}.ixn-help{margin-top:18px;padding:15px 18px;border:1px solid #dfe3e8;border-radius:8px;background:#fafbfc}
-.ixn-config-form{display:inline}.ixn-config-button{padding:0;border:0;background:none;color:#1678c2;cursor:pointer;text-decoration:underline}
-.ixn-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.9em;white-space:nowrap}.ixn-badge-success{background:#e8f5e9;color:#1b5e20}.ixn-badge-failed{background:#ffebee;color:#b71c1c}.ixn-badge-skipped{background:#fff8e1;color:#7a4f00}
-.ixn-native-filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}.ixn-native-filters label{white-space:nowrap}.ixn-native-filters select{margin-left:4px;max-width:180px}
-@media(max-width:640px){.ixn-details{grid-template-columns:1fr}.ixn-details dd{margin-bottom:7px}.ixn-native-filters{display:grid;grid-template-columns:1fr}.ixn-native-filters label{white-space:normal}.ixn-native-filters select{width:100%;max-width:none;margin:4px 0 0}}
-</style>';
-
-if ($feedback !== '') {
-    $display .= $feedback;
-}
-
 $status_class = 'ixn-error';
 $status_title = $LANG_indexnow['key_missing'];
 $status_help = $LANG_indexnow['key_missing_help'];
@@ -318,7 +299,48 @@ if ($key_status['key_present'] && !$key_status['key_valid']) {
     $status_help = '';
 }
 
-$display .= '<section class="ixn-card"><h2>' . $LANG_indexnow['configuration_status'] . '</h2>';
+$cleanup_attention = ((int) $cleanup_stats['pending'] > 0 || (int) $cleanup_stats['failed'] > 0 || (int) $cleanup_stats['review'] > 0);
+$cleanup_summary_class = $cleanup_attention ? 'ixn-summary-warning' : 'ixn-summary-ok';
+$cleanup_summary_value = (int) $cleanup_stats['pending'];
+$config_summary_class = $submission_ready ? 'ixn-summary-ok' : 'ixn-summary-error';
+$config_summary_value = $submission_ready ? 'Ready' : 'Attention';
+
+$display = '<style>
+.ixn-admin{max-width:1500px;margin:0 auto}
+.ixn-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 18px}
+.ixn-summary{position:relative;overflow:hidden;padding:16px 18px;border:1px solid #dfe3e8;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ixn-summary-label{display:block;margin-bottom:5px;color:#68737d;font-size:.9em;font-weight:600}.ixn-summary-value{display:block;font-size:1.6em;line-height:1.15;font-weight:700}.ixn-summary-note{display:block;margin-top:5px;color:#68737d;font-size:.86em}
+.ixn-summary:before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:#b9c2ca}.ixn-summary-ok:before{background:#2e7d32}.ixn-summary-warning:before{background:#d08a00}.ixn-summary-error:before{background:#c62828}
+.ixn-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;margin-bottom:18px}
+.ixn-card{box-sizing:border-box;width:100%;padding:20px;border:1px solid #dfe3e8;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ixn-card-full{margin-bottom:18px}.ixn-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}.ixn-card h2{margin:0;font-size:1.16em;line-height:1.3}.ixn-card-subtitle{margin:4px 0 0;color:#68737d;font-size:.92em}
+.ixn-status{padding:11px 13px;border:1px solid;border-radius:7px;margin-bottom:15px}.ixn-status strong{display:block}.ixn-status div{margin-top:4px}.ixn-ok{color:#1b5e20;background:#edf7ee;border-color:#b7d9bb}.ixn-warning{color:#755000;background:#fff8e6;border-color:#edd18a}.ixn-error{color:#a71919;background:#fff0f0;border-color:#e7abab}
+.ixn-details{display:grid;grid-template-columns:minmax(135px,auto) minmax(0,1fr);gap:8px 14px;margin:0}.ixn-details dt{font-weight:600;color:#4d5963}.ixn-details dd{margin:0;min-width:0;overflow-wrap:anywhere}.ixn-details code{white-space:normal;overflow-wrap:anywhere}
+.ixn-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding-top:15px;border-top:1px solid #edf0f2}.ixn-button{display:inline-block;padding:9px 15px;border:1px solid #1269a9;border-radius:5px;background:#1678c2;color:#fff;cursor:pointer;font-weight:600;text-decoration:none}.ixn-button:hover{filter:brightness(.96)}.ixn-button-secondary{background:#fff;color:#1678c2}.ixn-button[disabled]{border-color:#b7bec4;background:#b7bec4;color:#f7f7f7;cursor:not-allowed;filter:none}
+.ixn-config-form{display:inline}.ixn-config-button{padding:9px 15px;border:1px solid #1269a9;border-radius:5px;background:#fff;color:#1678c2;cursor:pointer;font-weight:600}.ixn-muted{color:#68737d}.ixn-success{color:#1b5e20;font-weight:600}
+.ixn-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.ixn-metric{padding:12px;border:1px solid #e2e6e9;border-radius:7px;background:#fafbfc;text-align:center}.ixn-metric strong{display:block;font-size:1.35em;line-height:1.2}.ixn-metric span{display:block;margin-top:4px;color:#68737d;font-size:.84em}
+.ixn-manual-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}.ixn-manual-copy p{margin:5px 0}.ixn-manual-action{text-align:right}.ixn-manual-action form{margin:0}
+.ixn-history-wrap{margin-top:18px}.ixn-help{margin-top:18px;padding:15px 18px;border:1px solid #dfe3e8;border-radius:8px;background:#fafbfc}.ixn-help summary{cursor:pointer;font-weight:600}
+.ixn-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.9em;white-space:nowrap}.ixn-badge-success{background:#e8f5e9;color:#1b5e20}.ixn-badge-failed{background:#ffebee;color:#b71c1c}.ixn-badge-skipped{background:#fff8e1;color:#7a4f00}
+.ixn-native-filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}.ixn-native-filters label{white-space:nowrap}.ixn-native-filters select{margin-left:4px;max-width:180px}
+@media(max-width:900px){.ixn-summary-grid{grid-template-columns:1fr}.ixn-layout{grid-template-columns:1fr}.ixn-manual-row{grid-template-columns:1fr}.ixn-manual-action{text-align:left}.ixn-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.ixn-card{padding:16px}.ixn-details{grid-template-columns:1fr;gap:3px}.ixn-details dd{margin-bottom:9px}.ixn-metrics{grid-template-columns:1fr 1fr}.ixn-native-filters{display:grid;grid-template-columns:1fr}.ixn-native-filters label{white-space:normal}.ixn-native-filters select{width:100%;max-width:none;margin:4px 0 0}.ixn-actions{align-items:stretch}.ixn-button,.ixn-config-button{width:100%;box-sizing:border-box;text-align:center}}
+</style>';
+
+$display .= '<div class="ixn-admin">';
+if ($feedback !== '') {
+    $display .= $feedback;
+}
+
+$display .= '<div class="ixn-summary-grid" aria-label="IndexNow administration summary">';
+$display .= '<div class="ixn-summary ' . $config_summary_class . '"><span class="ixn-summary-label">IndexNow</span><span class="ixn-summary-value">' . $config_summary_value . '</span><span class="ixn-summary-note">' . htmlspecialchars($status_title, ENT_QUOTES, 'UTF-8') . '</span></div>';
+$display .= '<div class="ixn-summary ' . $cleanup_summary_class . '"><span class="ixn-summary-label">Security cleanup</span><span class="ixn-summary-value">' . $cleanup_summary_value . '</span><span class="ixn-summary-note">Pending remediation</span></div>';
+$display .= '<div class="ixn-summary"><span class="ixn-summary-label">Articles</span><span class="ixn-summary-value">' . (int) $total_articles . '</span><span class="ixn-summary-note">Available for manual submission</span></div>';
+$display .= '</div>';
+
+$display .= '<div class="ixn-layout">';
+
+$display .= '<section class="ixn-card"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['configuration_status'] . '</h2><p class="ixn-card-subtitle">Key, verification file and plugin runtime settings.</p></div></div>';
 $display .= '<div class="ixn-status ' . $status_class . '"><strong>' . $status_title . '</strong>';
 if ($status_help !== '') {
     $display .= '<div>' . $status_help . '</div>';
@@ -332,31 +354,27 @@ if ($key_status['key_valid']) {
     $display .= '<dt>' . $LANG_indexnow['public_url'] . '</dt><dd><a href="' . htmlspecialchars($key_status['file_url'], ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener noreferrer">' . htmlspecialchars($key_status['file_url'], ENT_QUOTES, 'UTF-8') . '</a></dd>';
 }
 $display .= '<dt>' . $LANG_indexnow['debug_status'] . '</dt><dd>' . ($debug_enabled ? $LANG_indexnow['debug_enabled'] : $LANG_indexnow['debug_disabled']) . '</dd>';
-$display .= '<dt>' . $LANG_indexnow['error_log'] . '</dt><dd><code>' . htmlspecialchars($error_log_path, ENT_QUOTES, 'UTF-8') . '</code></dd>';
-$display .= '<dt>' . $LANG_indexnow['history_retention'] . '</dt><dd>' . ($retention_days > 0 ? (int) $retention_days . ' days' : 'Unlimited') . '</dd></dl>';
+$display .= '<dt>' . $LANG_indexnow['history_retention'] . '</dt><dd>' . ($retention_days > 0 ? (int) $retention_days . ' days' : 'Unlimited') . '</dd>';
+$display .= '<dt>' . $LANG_indexnow['error_log'] . '</dt><dd><code>' . htmlspecialchars($error_log_path, ENT_QUOTES, 'UTF-8') . '</code></dd></dl>';
 $config_url = $_CONF['site_admin_url'] . '/configuration.php';
 $display .= '<div class="ixn-actions"><form class="ixn-config-form" method="post" action="' . htmlspecialchars($config_url, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="conf_group" value="indexnow"><button type="submit" class="ixn-config-button">' . $LANG_indexnow['open_configuration'] . '</button></form></div></section>';
 
-$display .= '<section class="ixn-card"><h2>' . $LANG_indexnow['manual_submission'] . '</h2>';
-$display .= '<p class="ixn-muted">' . sprintf($LANG_indexnow['total_articles'], $total_articles) . '</p>';
-if ($submitted_range !== '') {
-    $display .= '<p class="ixn-success">' . $submitted_range . '</p>';
+$display .= '<section class="ixn-card"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['cleanup_title'] . '</h2><p class="ixn-card-subtitle">Review previously submitted URLs that may no longer be public.</p></div></div>';
+if ((int) $cleanup_stats['review'] > 0) {
+    $display .= '<div class="ixn-status ixn-warning"><strong>Administrator review required</strong><div>' . $LANG_indexnow['cleanup_legacy_warning'] . '</div></div>';
+} elseif ((int) $cleanup_stats['failed'] > 0) {
+    $display .= '<div class="ixn-status ixn-error"><strong>Cleanup failures require attention</strong><div>Failed remediation entries remain visible below and can be audited again.</div></div>';
+} elseif ((int) $cleanup_stats['pending'] > 0) {
+    $display .= '<div class="ixn-status ixn-warning"><strong>Cleanup is pending</strong><div>' . $LANG_indexnow['cleanup_schedule_help'] . '</div></div>';
+} else {
+    $display .= '<div class="ixn-status ixn-ok"><strong>No pending remediation</strong><div>The cleanup queue currently requires no action.</div></div>';
 }
-$display .= '<p>' . $next_action_message . '</p>';
-if (!$submission_ready) {
-    $display .= '<p class="ixn-warning ixn-status">' . $LANG_indexnow['submission_not_ready'] . '</p>';
-}
-$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '" onsubmit="indexnowSubmissionLoading()"><input type="hidden" name="offset" value="' . $next_offset . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '">';
-$display .= '<button type="submit" id="submit-button" name="submit_articles" class="ixn-button"' . ($submission_ready ? '' : ' disabled="disabled"') . '>' . $LANG_indexnow['submit_to_bing'] . '</button></form>';
-$display .= '<p id="loading-message" class="ixn-muted" style="display:none">' . $LANG_indexnow['loading_message'] . '</p></section>';
-
-$display .= '<section class="ixn-card"><h2>' . $LANG_indexnow['cleanup_title'] . '</h2>';
-$display .= '<p>' . $LANG_indexnow['cleanup_intro'] . '</p><dl class="ixn-details">';
-$display .= '<dt>' . $LANG_indexnow['cleanup_pending'] . '</dt><dd>' . (int) $cleanup_stats['pending'] . '</dd>';
-$display .= '<dt>' . $LANG_indexnow['cleanup_completed'] . '</dt><dd>' . (int) $cleanup_stats['completed'] . '</dd>';
-$display .= '<dt>' . $LANG_indexnow['cleanup_failed'] . '</dt><dd>' . (int) $cleanup_stats['failed'] . '</dd>';
-$display .= '<dt>' . $LANG_indexnow['cleanup_review'] . '</dt><dd>' . (int) $cleanup_stats['review'] . '</dd>';
-$display .= '<dt>' . $LANG_indexnow['cleanup_last_audit'] . '</dt><dd>';
+$display .= '<div class="ixn-metrics">';
+$display .= '<div class="ixn-metric"><strong>' . (int) $cleanup_stats['pending'] . '</strong><span>' . $LANG_indexnow['cleanup_pending'] . '</span></div>';
+$display .= '<div class="ixn-metric"><strong>' . (int) $cleanup_stats['completed'] . '</strong><span>' . $LANG_indexnow['cleanup_completed'] . '</span></div>';
+$display .= '<div class="ixn-metric"><strong>' . (int) $cleanup_stats['failed'] . '</strong><span>' . $LANG_indexnow['cleanup_failed'] . '</span></div>';
+$display .= '<div class="ixn-metric"><strong>' . (int) $cleanup_stats['review'] . '</strong><span>' . $LANG_indexnow['cleanup_review'] . '</span></div>';
+$display .= '</div><dl class="ixn-details"><dt>' . $LANG_indexnow['cleanup_last_audit'] . '</dt><dd>';
 if ($cleanup_stats['last_audit'] !== '') {
     $auditTimestamp = strtotime($cleanup_stats['last_audit']);
     if ($auditTimestamp !== false) {
@@ -372,16 +390,25 @@ if ($cleanup_stats['last_audit'] !== '') {
     $display .= $LANG_indexnow['cleanup_never_audited'];
 }
 $display .= '</dd></dl>';
-if ((int) $cleanup_stats['review'] > 0) {
-    $display .= '<div class="ixn-status ixn-warning">' . $LANG_indexnow['cleanup_legacy_warning'] . '</div>';
-}
-$display .= '<p class="ixn-muted">' . $LANG_indexnow['cleanup_schedule_help'] . '</p>';
-$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '">';
-$display .= '<button type="submit" name="run_security_audit" class="ixn-button">' . $LANG_indexnow['cleanup_run'] . '</button></form></section>';
+$display .= '<div class="ixn-actions"><form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_security_audit" class="ixn-button">' . $LANG_indexnow['cleanup_run'] . '</button></form></div></section>';
 
-$display .= INDEXNOW_submissionHistoryList();
+$display .= '</div>';
+
+$display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['manual_submission'] . '</h2><p class="ixn-card-subtitle">Submit public articles in controlled batches of ' . (int) $batch_size . ' URLs.</p></div></div>';
+$display .= '<div class="ixn-manual-row"><div class="ixn-manual-copy"><p><strong>' . sprintf($LANG_indexnow['total_articles'], $total_articles) . '</strong></p>';
+if ($submitted_range !== '') {
+    $display .= '<p class="ixn-success">' . $submitted_range . '</p>';
+}
+$display .= '<p class="ixn-muted">' . $next_action_message . '</p></div><div class="ixn-manual-action">';
+if (!$submission_ready) {
+    $display .= '<div class="ixn-status ixn-warning">' . $LANG_indexnow['submission_not_ready'] . '</div>';
+}
+$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '" onsubmit="indexnowSubmissionLoading()"><input type="hidden" name="offset" value="' . $next_offset . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" id="submit-button" name="submit_articles" class="ixn-button"' . ($submission_ready ? '' : ' disabled="disabled"') . '>' . $LANG_indexnow['submit_to_bing'] . '</button></form><p id="loading-message" class="ixn-muted" style="display:none">' . $LANG_indexnow['loading_message'] . '</p></div></div></section>';
+
+$display .= '<div class="ixn-history-wrap">' . INDEXNOW_submissionHistoryList() . '</div>';
 $display .= '<details class="ixn-help"><summary>' . $LANG_indexnow['documentation'] . '</summary><div class="ixn-help-body">' . $LANG_indexnow['documentation_content'] . '</div></details>';
 $display .= '<script>function indexnowSubmissionLoading(){var b=document.getElementById("submit-button"),m=document.getElementById("loading-message");if(b){b.disabled=true;}if(m){m.style.display="block";}}</script>';
+$display .= '</div>';
 
 if (function_exists('COM_createHTMLDocument')) {
     $html = COM_startBlock($LANG_indexnow['plugin_name']) . $display . COM_endBlock();
