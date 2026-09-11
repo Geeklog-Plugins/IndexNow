@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1
+
+- Validate all submitted URLs before contacting IndexNow and reject non-HTTP(S), foreign-host, credential-bearing, control-character and unexpected-port URLs.
+- Validate IndexNow keys at runtime before any submission.
+- Restrict submission-history retention configuration to 0, 30, 90, 180 or 365 days.
+- Sanitize CR, LF and NUL characters before writing plugin messages to Geeklog's error log.
+- Explicitly enable TLS peer and host verification for IndexNow cURL requests and restrict protocols to HTTPS where supported.
+- Submit scheduled URLs in batches of up to 100 instead of one HTTP request per item.
+- Preserve per-item type, ID and event metadata when manual and scheduled batch submissions are recorded in submission history.
+- Harden the release workflow and generate a SHA-256 checksum alongside the installable archive.
+
 ## 1.2.0
 
 - Add generic Geeklog content lifecycle support through `PLG_itemSaved()` and `PLG_itemDeleted()`.
