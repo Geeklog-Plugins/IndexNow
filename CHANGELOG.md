@@ -16,11 +16,15 @@
 - Add an `indexnow_cleanup` remediation queue for URLs that submission history proves were previously accepted by IndexNow but are now private, deleted or have a changed canonical URL.
 - Run a local-only security audit automatically during the 1.2.1 upgrade; the upgrade itself performs no external HTTP request.
 - Process pending remediation URLs automatically from the IndexNow scheduled task in batches of up to 100, retrying failures up to three times.
+- Call cleanup processing directly from `plugin_runScheduledTask_indexnow()` instead of relying on call-stack detection.
 - Record remediation requests in submission history with the `cleanup` event.
-- Add a Security cleanup administration panel with queue statistics, last-audit information and a CSRF-protected manual re-audit action.
+- Add a Security cleanup administration panel with queue statistics, last-audit information, a CSRF-protected manual re-audit action and a manual "Run cleanup now" batch action.
+- Remove both `indexnow_submissions` and `indexnow_cleanup` tables during plugin uninstall.
 - Mark upgrades from pre-1.2.0 releases as `legacy_unverifiable` when exact historical submissions cannot be reconstructed; unknown private URLs are never sent merely to guess what may have been submitted.
 - Detect Geeklog XMLSitemap's optional native IndexNow support in the administration dashboard and warn when both providers are enabled, recommending that only XMLSitemap's IndexNow option be disabled while sitemap generation remains active.
 - Never modify XMLSitemap configuration automatically; coexistence diagnostics are advisory and preserve clear plugin responsibility boundaries.
+- Make the administration dashboard, submission-history status/event labels, cleanup messages and XMLSitemap coexistence guidance translatable through `language/english.php` instead of hardcoded display strings.
+- Keep only internal debug/log wording and protocol/product names in code; administrator-facing text is language-file driven.
 - Harden the release workflow and generate a SHA-256 checksum alongside the installable archive.
 
 ## 1.2.0
