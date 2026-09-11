@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.2.0                                                     |
+// | IndexNow Plugin 1.2.1                                                     |
 // +---------------------------------------------------------------------------+
 // | language/english.php                                                      |
 // +---------------------------------------------------------------------------+
@@ -85,8 +85,20 @@ $LANG_indexnow = array(
     'filter_all_statuses' => 'All statuses',
     'filter_all_events' => 'All events',
     'filter_all_types' => 'All types',
+    'cleanup_title' => 'Security cleanup',
+    'cleanup_intro' => 'Audits URLs previously accepted by IndexNow and queues a recrawl when an URL is no longer anonymously accessible or its canonical URL changed.',
+    'cleanup_pending' => 'Pending remediation',
+    'cleanup_completed' => 'Completed',
+    'cleanup_failed' => 'Failed after retries',
+    'cleanup_review' => 'Legacy review warnings',
+    'cleanup_last_audit' => 'Last audit',
+    'cleanup_never_audited' => 'No security audit has been recorded yet.',
+    'cleanup_run' => 'Run security audit again',
+    'cleanup_run_success' => 'Security audit completed: %d historical URLs checked, %d remediation URLs queued.',
+    'cleanup_legacy_warning' => 'This installation contains pre-1.2.0 history that cannot be reconstructed safely. Unknown private URLs are never submitted during remediation.',
+    'cleanup_schedule_help' => 'Pending remediation URLs are processed automatically by the IndexNow scheduled task, in batches of up to 100.',
     'documentation' => 'Documentation & Help',
-    'documentation_content' => '<p><strong>Step 1: Generate an IndexNow Key</strong><br>Visit the IndexNow key creation page at <a href="https://www.bing.com/webmasters/indexnow" target="_blank" rel="noopener noreferrer">https://www.bing.com/webmasters/indexnow</a>.</p><p><strong>Step 2: Create and Host the Key File</strong><br>Create a text file containing only your key and upload it to the root directory of your website.</p><p><strong>Step 3: Configure the Plugin</strong><br>Open Geeklog Configuration, select IndexNow, and enter your key. Version 1.2.0 records automatic, deleted, scheduled and manual submission attempts in its own history table.</p>'
+    'documentation_content' => '<p><strong>Step 1: Generate an IndexNow Key</strong><br>Visit the IndexNow key creation page at <a href="https://www.bing.com/webmasters/indexnow" target="_blank" rel="noopener noreferrer">https://www.bing.com/webmasters/indexnow</a>.</p><p><strong>Step 2: Create and Host the Key File</strong><br>Create a text file containing only your key and upload it to the root directory of your website.</p><p><strong>Step 3: Configure the Plugin</strong><br>Open Geeklog Configuration, select IndexNow, and enter your key. Version 1.2.1 records submissions, enforces anonymous visibility before submission, and maintains a local security-remediation queue for previously submitted URLs that should be revisited.</p>'
 );
 
 ?>
