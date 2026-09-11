@@ -131,26 +131,6 @@ function indexnow_get_last_submission($type, $id)
 }
 
 /**
- * If this purge was invoked by Geeklog's IndexNow scheduled task, process one
- * remediation batch first. The same purge helper is also used by the admin UI,
- * so the call stack check prevents unexpected network traffic on page views.
- */
-function indexnow_process_cleanup_if_scheduled()
-{
-    if (!function_exists('indexnow_process_cleanup_queue')) {
-        return;
-    }
-
-    $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
-    foreach ($trace as $frame) {
-        if (isset($frame['function']) && $frame['function'] === 'plugin_runScheduledTask_indexnow') {
-            indexnow_process_cleanup_queue(100);
-            return;
-        }
-    }
-}
-
-/**
  * Purge history according to the configured retention period.
  * A value of 0 means unlimited retention.
  */
@@ -161,9 +141,6 @@ function indexnow_purge_submission_history($days = null)
     if (!indexnow_history_table_ready()) {
         return 0;
     }
-
-    // Scheduled cleanup runs before ordinary scheduled URL submissions.
-    indexnow_process_cleanup_if_scheduled();
 
     if ($days === null) {
         $days = isset($_INDEXNOW_CONF['history_retention_days'])
