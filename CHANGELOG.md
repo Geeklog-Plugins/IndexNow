@@ -13,6 +13,12 @@
 - Resolve plugin-owned URLs through permission-aware `PLG_getItemInfo(..., uid=1)` calls and fail closed when anonymous accessibility cannot be verified.
 - When previously public content becomes private, request a recrawl using only an URL that was already successfully submitted while public.
 - Submit deleted URLs only when submission history proves that the URL had previously been successfully submitted while public.
+- Add an `indexnow_cleanup` remediation queue for URLs that submission history proves were previously accepted by IndexNow but are now private, deleted or have a changed canonical URL.
+- Run a local-only security audit automatically during the 1.2.1 upgrade; the upgrade itself performs no external HTTP request.
+- Process pending remediation URLs automatically from the IndexNow scheduled task in batches of up to 100, retrying failures up to three times.
+- Record remediation requests in submission history with the `cleanup` event.
+- Add a Security cleanup administration panel with queue statistics, last-audit information and a CSRF-protected manual re-audit action.
+- Mark upgrades from pre-1.2.0 releases as `legacy_unverifiable` when exact historical submissions cannot be reconstructed; unknown private URLs are never sent merely to guess what may have been submitted.
 - Harden the release workflow and generate a SHA-256 checksum alongside the installable archive.
 
 ## 1.2.0
