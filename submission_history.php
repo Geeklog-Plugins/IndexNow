@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.2.0                                                     |
+// | IndexNow Plugin 1.2.1                                                     |
 // +---------------------------------------------------------------------------+
 // | submission_history.php                                                    |
 // |                                                                           |
@@ -48,14 +48,6 @@ function indexnow_history_table_ready()
 
 /**
  * Record one IndexNow submission attempt.
- *
- * @param array  $context   item_type, item_id, item_subtype and event
- * @param string $url
- * @param bool   $submitted Whether an HTTP request was attempted
- * @param int    $httpCode
- * @param string $status    success, failed or skipped
- * @param string $message
- * @return bool
  */
 function indexnow_record_submission($context, $url, $submitted, $httpCode, $status, $message)
 {
@@ -90,12 +82,6 @@ function indexnow_record_submission($context, $url, $submitted, $httpCode, $stat
     return !DB_error();
 }
 
-/**
- * Return recent submission attempts for the administration dashboard.
- *
- * @param int $limit
- * @return array
- */
 function indexnow_get_recent_submissions($limit = 25)
 {
     global $_TABLES;
@@ -124,11 +110,6 @@ function indexnow_get_recent_submissions($limit = 25)
 
 /**
  * Return the latest recorded attempt for one Geeklog item.
- * This intentionally stays provider-neutral so Hub can consume it later.
- *
- * @param string $type
- * @param string $id
- * @return array
  */
 function indexnow_get_last_submission($type, $id)
 {
@@ -150,11 +131,28 @@ function indexnow_get_last_submission($type, $id)
 }
 
 /**
+ * If this purge was invoked by Geeklog's IndexNow scheduled task, process one
+ * remediation batch first. The same purge helper is also used by the admin UI,
+ * so the call stack check prevents unexpected network traffic on page views.
+ */
+function indexnow_process_cleanup_if_scheduled()
+{
+    if (!function_exists('indexnow_process_cleanup_queue')) {
+        return;
+    }
+
+    $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
+    foreach ($trace as $frame) {
+        if (isset($frame['function']) && $frame['function'] === 'plugin_runScheduledTask_indexnow') {
+            indexnow_process_cleanup_queue(100);
+            return;
+        }
+    }
+}
+
+/**
  * Purge history according to the configured retention period.
  * A value of 0 means unlimited retention.
- *
- * @param int|null $days
- * @return int Number of rows deleted when available
  */
 function indexnow_purge_submission_history($days = null)
 {
@@ -163,6 +161,9 @@ function indexnow_purge_submission_history($days = null)
     if (!indexnow_history_table_ready()) {
         return 0;
     }
+
+    // Scheduled cleanup runs before ordinary scheduled URL submissions.
+    indexnow_process_cleanup_if_scheduled();
 
     if ($days === null) {
         $days = isset($_INDEXNOW_CONF['history_retention_days'])
@@ -183,8 +184,6 @@ function indexnow_purge_submission_history($days = null)
         return 0;
     }
 
-    // Geeklog 2.1.1 requires the query result/connection argument here.
-    // Passing it is also compatible with later Geeklog database wrappers.
     return function_exists('DB_affectedRows') ? (int) DB_affectedRows($result) : 0;
 }
 
