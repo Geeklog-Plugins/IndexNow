@@ -2,7 +2,7 @@
 
 /* Reminder: always indent with 4 spaces (no tabs). */
 // +---------------------------------------------------------------------------+
-// | IndexNow Plugin 1.2.0                                                     |
+// | IndexNow Plugin 1.2.1                                                     |
 // +---------------------------------------------------------------------------+
 // | functions.inc                                                             |
 // +---------------------------------------------------------------------------+
@@ -34,17 +34,76 @@ if (!isset($_INDEXNOW_CONF)) {
 $_TABLES['indexnow_submissions'] = $_DB_table_prefix . 'indexnow_submissions';
 require_once $plugin_path . 'submission_history.php';
 
+/**
+ * Remove control characters that could forge additional log entries.
+ */
+function indexnow_sanitize_log_value($value)
+{
+    return str_replace(array("\r", "\n", "\0"), '', (string) $value);
+}
+
 function indexnow_log($message, $force = false)
 {
     global $_INDEXNOW_CONF;
 
     $debug_mode = isset($_INDEXNOW_CONF['debug_mode']) ? (int) $_INDEXNOW_CONF['debug_mode'] : 0;
     if ($debug_mode === 1 || $force) {
-        COM_errorLog('[IndexNow] ' . $message);
+        COM_errorLog('[IndexNow] ' . indexnow_sanitize_log_value($message));
         return true;
     }
 
     return false;
+}
+
+/**
+ * Validate an IndexNow key without changing it.
+ */
+function indexnow_validate_key($key)
+{
+    $key = trim((string) $key);
+    return ($key !== '' && preg_match('/^[A-Za-z0-9-]{8,128}$/D', $key)) ? $key : false;
+}
+
+/**
+ * Only accept HTTP(S) URLs belonging to the configured Geeklog host.
+ * This establishes a trust boundary between IndexNow and content plugins.
+ */
+function indexnow_validate_url($url)
+{
+    global $_CONF;
+
+    $url = trim((string) $url);
+    if ($url === '' || preg_match('/[\x00-\x1F\x7F]/', $url)) {
+        return false;
+    }
+
+    $parts = parse_url($url);
+    $siteParts = parse_url($_CONF['site_url']);
+    if (!is_array($parts) || !is_array($siteParts) ||
+        empty($parts['scheme']) || empty($parts['host']) || empty($siteParts['host'])) {
+        return false;
+    }
+
+    $scheme = strtolower($parts['scheme']);
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return false;
+    }
+
+    if (strcasecmp($parts['host'], $siteParts['host']) !== 0) {
+        return false;
+    }
+
+    if (isset($parts['user']) || isset($parts['pass'])) {
+        return false;
+    }
+
+    $urlPort = isset($parts['port']) ? (int) $parts['port'] : null;
+    $sitePort = isset($siteParts['port']) ? (int) $siteParts['port'] : null;
+    if ($urlPort !== $sitePort) {
+        return false;
+    }
+
+    return $url;
 }
 
 function indexnow_get_key_status()
@@ -67,11 +126,13 @@ function indexnow_get_key_status()
         return $status;
     }
 
-    $status['key_valid'] = (bool) preg_match('/^[A-Za-z0-9-]{8,128}$/D', $key);
+    $validatedKey = indexnow_validate_key($key);
+    $status['key_valid'] = ($validatedKey !== false);
     if (!$status['key_valid']) {
         return $status;
     }
 
+    $key = $validatedKey;
     $status['file_path'] = rtrim($_CONF['path_html'], '/\\') . DIRECTORY_SEPARATOR . $key . '.txt';
     $status['file_url'] = rtrim($_CONF['site_url'], '/') . '/' . rawurlencode($key) . '.txt';
     $status['file_exists'] = is_file($status['file_path']);
@@ -214,7 +275,6 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
 
     $url = '';
     $key = isset($_INDEXNOW_CONF['indexnow_key']) ? trim($_INDEXNOW_CONF['indexnow_key']) : '';
-    $isCoreType = ($type === 'article' || $type === 'staticpages' || $type === 'topic');
     $context = indexnow_submission_context($type, $id, $sub_type, 'saved');
 
     if ($type === 'article') {
@@ -246,6 +306,12 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
             indexnow_record_submission($context, '', false, 0, 'failed', 'Unable to resolve canonical URL.');
             return;
         }
+    }
+
+    if (indexnow_validate_url($url) === false) {
+        indexnow_log("Rejected unsafe or foreign URL (type: $type, ID: $id, URL: $url).", true);
+        indexnow_record_submission($context, $url, false, 0, 'failed', 'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+        return;
     }
 
     if ($key === '') {
@@ -284,6 +350,12 @@ function plugin_itemdeleted_indexnow($id, $type, $sub_type = '')
         }
     }
 
+    if (indexnow_validate_url($url) === false) {
+        indexnow_log("Rejected unsafe or foreign deleted-item URL (type: $type, ID: $id, URL: $url).", true);
+        indexnow_record_submission($context, $url, false, 0, 'failed', 'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+        return;
+    }
+
     if ($key === '') {
         indexnow_log("Delete resolved but not submitted: no key configured (type: $type, ID: $id, URL: $url).", true);
         indexnow_record_submission($context, $url, false, 0, 'skipped', 'No IndexNow key configured.');
@@ -294,7 +366,24 @@ function plugin_itemdeleted_indexnow($id, $type, $sub_type = '')
 }
 
 /**
+ * Apply common secure cURL options for IndexNow HTTPS requests.
+ */
+function indexnow_apply_curl_security($ch)
+{
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+    if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTPS')) {
+        curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+    }
+}
+
+/**
  * Send one or multiple URLs to IndexNow and persist the result.
+ * For batches, $context['batch_items'] may contain one context per URL.
  *
  * @param string|array $url
  * @param array        $context
@@ -305,17 +394,27 @@ function send_to_indexnow($url, $context = array())
     global $_CONF, $_INDEXNOW_CONF;
 
     $key = isset($_INDEXNOW_CONF['indexnow_key']) ? trim($_INDEXNOW_CONF['indexnow_key']) : '';
-    $keyLocation = $_CONF['site_url'] . '/' . $key . '.txt';
-
-    if ($key === '') {
-        indexnow_log('IndexNow: Missing key, aborting.', true);
-        if (is_string($url)) {
-            indexnow_record_submission($context, $url, false, 0, 'skipped', 'No IndexNow key configured.');
-        }
-        return false;
-    }
+    $validatedKey = indexnow_validate_key($key);
 
     if (is_string($url)) {
+        $validatedUrl = indexnow_validate_url($url);
+        if ($validatedUrl === false) {
+            indexnow_log('IndexNow: Rejected unsafe or foreign URL: ' . $url, true);
+            indexnow_record_submission($context, $url, false, 0, 'failed',
+                'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+            return false;
+        }
+        $url = $validatedUrl;
+
+        if ($validatedKey === false) {
+            $message = ($key === '') ? 'No IndexNow key configured.' : 'Invalid IndexNow key configured.';
+            indexnow_log('IndexNow: ' . $message, true);
+            indexnow_record_submission($context, $url, false, 0, 'skipped', $message);
+            return false;
+        }
+
+        $key = $validatedKey;
+        $keyLocation = rtrim($_CONF['site_url'], '/') . '/' . rawurlencode($key) . '.txt';
         $endpoint = 'https://api.indexnow.org/indexnow?' . http_build_query(array(
             'url' => $url,
             'key' => $key,
@@ -324,9 +423,7 @@ function send_to_indexnow($url, $context = array())
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $endpoint);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        indexnow_apply_curl_security($ch);
         $response = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
@@ -348,20 +445,55 @@ function send_to_indexnow($url, $context = array())
     }
 
     if (is_array($url) && !empty($url)) {
+        $validUrls = array();
+        $batchContexts = array();
+        $providedContexts = isset($context['batch_items']) && is_array($context['batch_items'])
+            ? $context['batch_items'] : array();
+
+        foreach ($url as $index => $batchUrl) {
+            $rowContext = isset($providedContexts[$index]) && is_array($providedContexts[$index])
+                ? $providedContexts[$index] : $context;
+            unset($rowContext['batch_items']);
+
+            $validatedUrl = indexnow_validate_url($batchUrl);
+            if ($validatedUrl === false) {
+                indexnow_log('IndexNow: Rejected unsafe or foreign batch URL: ' . $batchUrl, true);
+                indexnow_record_submission($rowContext, $batchUrl, false, 0, 'failed',
+                    'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+                continue;
+            }
+
+            $validUrls[] = $validatedUrl;
+            $batchContexts[] = $rowContext;
+        }
+
+        if (empty($validUrls)) {
+            return false;
+        }
+
+        if ($validatedKey === false) {
+            $message = ($key === '') ? 'No IndexNow key configured.' : 'Invalid IndexNow key configured.';
+            foreach ($validUrls as $index => $batchUrl) {
+                indexnow_record_submission($batchContexts[$index], $batchUrl, false, 0, 'skipped', $message);
+            }
+            indexnow_log('IndexNow: ' . $message, true);
+            return false;
+        }
+
+        $key = $validatedKey;
+        $keyLocation = rtrim($_CONF['site_url'], '/') . '/' . rawurlencode($key) . '.txt';
         $payload = array(
             'host' => parse_url($_CONF['site_url'], PHP_URL_HOST),
             'key' => $key,
             'keyLocation' => $keyLocation,
-            'urlList' => $url
+            'urlList' => $validUrls
         );
 
         $ch = curl_init('https://api.indexnow.org/indexnow');
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        indexnow_apply_curl_security($ch);
         $response = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
@@ -371,8 +503,8 @@ function send_to_indexnow($url, $context = array())
         $message = $success ? 'IndexNow accepted the batch.' :
             ('IndexNow batch request failed.' . ($curlError !== '' ? ' cURL: ' . $curlError : ''));
 
-        foreach ($url as $batchUrl) {
-            $rowContext = $context;
+        foreach ($validUrls as $index => $batchUrl) {
+            $rowContext = $batchContexts[$index];
             if (!isset($rowContext['event'])) {
                 $rowContext['event'] = 'manual';
             }
@@ -381,9 +513,9 @@ function send_to_indexnow($url, $context = array())
         }
 
         if ($success) {
-            indexnow_log('IndexNow BATCH OK (' . count($url) . " URLs) - HTTP $httpCode");
+            indexnow_log('IndexNow BATCH OK (' . count($validUrls) . " URLs) - HTTP $httpCode");
         } else {
-            indexnow_log('IndexNow BATCH failed (' . count($url) . ") - HTTP $httpCode" .
+            indexnow_log('IndexNow BATCH failed (' . count($validUrls) . ") - HTTP $httpCode" .
                 ($curlError !== '' ? " - cURL: $curlError" : ''), true);
         }
 
@@ -399,6 +531,7 @@ function submit_articles_by_date_desc_to_indexnow($limit = 1, $offset = 0)
     global $_CONF, $_TABLES;
 
     $urls = array();
+    $contexts = array();
     $limit = max(1, (int) $limit);
     $offset = max(0, (int) $offset);
 
@@ -410,9 +543,12 @@ function submit_articles_by_date_desc_to_indexnow($limit = 1, $offset = 0)
         $urls[] = $_CONF['url_rewrite']
             ? $_CONF['site_url'] . '/article.php/' . $A['sid']
             : $_CONF['site_url'] . '/article.php?story=' . $A['sid'];
+        $contexts[] = indexnow_submission_context('article', $A['sid'], '', 'manual');
     }
 
-    send_to_indexnow($urls, array('item_type' => 'article', 'event' => 'manual'));
+    if (!empty($urls)) {
+        send_to_indexnow($urls, array('event' => 'manual', 'batch_items' => $contexts));
+    }
     $submitted_count = count($urls);
     indexnow_log("IndexNow: Submitted $submitted_count articles (offset: $offset, limit: $limit).");
 
@@ -460,12 +596,23 @@ function plugin_runScheduledTask_indexnow()
         );
     }
 
-    foreach ($items as $item) {
-        send_to_indexnow($item['url'], indexnow_submission_context($item['type'], $item['id'], '', 'scheduled'));
-        usleep(500000);
+    $batchSize = 100;
+    for ($offset = 0; $offset < count($items); $offset += $batchSize) {
+        $chunk = array_slice($items, $offset, $batchSize);
+        $urls = array();
+        $contexts = array();
+
+        foreach ($chunk as $item) {
+            $urls[] = $item['url'];
+            $contexts[] = indexnow_submission_context($item['type'], $item['id'], '', 'scheduled');
+        }
+
+        if (!empty($urls)) {
+            send_to_indexnow($urls, array('event' => 'scheduled', 'batch_items' => $contexts));
+        }
     }
 
-    indexnow_log('IndexNow scheduled task: submitted ' . count($items) . ' URLs from the last 24h.');
+    indexnow_log('IndexNow scheduled task: processed ' . count($items) . ' URLs from the last 24h in batches.');
     return true;
 }
 
