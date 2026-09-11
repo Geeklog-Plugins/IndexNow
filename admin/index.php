@@ -301,6 +301,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_security_audit'])
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_cleanup_now']) && SEC_checkToken()) {
+    try {
+        $beforeCleanup = indexnow_cleanup_get_stats();
+        $processedCleanup = indexnow_process_cleanup_queue(100);
+        $afterCleanup = indexnow_cleanup_get_stats();
+        $completedCleanup = max(0, (int) $afterCleanup['completed'] - (int) $beforeCleanup['completed']);
+        $failedCleanup = max(0, (int) $afterCleanup['failed'] - (int) $beforeCleanup['failed']);
+        $pendingCleanup = (int) $afterCleanup['pending'];
+        $cleanupMessage = $processedCleanup . ' remediation URL(s) processed: ' .
+            $completedCleanup . ' completed, ' . $failedCleanup . ' failed, ' .
+            $pendingCleanup . ' still pending.';
+        $feedback = COM_showMessageText($cleanupMessage, $LANG_indexnow['cleanup_title']);
+    } catch (Exception $e) {
+        $feedback = COM_showMessageText(
+            $LANG_indexnow['submit_error'] . ' ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'),
+            $LANG_indexnow['cleanup_title']
+        );
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_articles']) && SEC_checkToken()) {
     try {
         $submitted_count = submit_articles_by_date_desc_to_indexnow($batch_size, $offset);
@@ -376,7 +396,7 @@ $display = '<style>
 .ixn-card-full{margin-bottom:18px}.ixn-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}.ixn-card h2{margin:0;font-size:1.16em;line-height:1.3}.ixn-card-subtitle{margin:4px 0 0;color:#68737d;font-size:.92em}
 .ixn-status{padding:11px 13px;border:1px solid;border-radius:7px;margin-bottom:15px}.ixn-status strong{display:block}.ixn-status div{margin-top:4px}.ixn-ok{color:#1b5e20;background:#edf7ee;border-color:#b7d9bb}.ixn-warning{color:#755000;background:#fff8e6;border-color:#edd18a}.ixn-error{color:#a71919;background:#fff0f0;border-color:#e7abab}
 .ixn-details{display:grid;grid-template-columns:minmax(135px,auto) minmax(0,1fr);gap:8px 14px;margin:0}.ixn-details dt{font-weight:600;color:#4d5963}.ixn-details dd{margin:0;min-width:0;overflow-wrap:anywhere}.ixn-details code{white-space:normal;overflow-wrap:anywhere}
-.ixn-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding-top:15px;border-top:1px solid #edf0f2}.ixn-button{display:inline-block;padding:9px 15px;border:1px solid #1269a9;border-radius:5px;background:#1678c2;color:#fff;cursor:pointer;font-weight:600;text-decoration:none}.ixn-button:hover{filter:brightness(.96)}.ixn-button-secondary{background:#fff;color:#1678c2}.ixn-button[disabled]{border-color:#b7bec4;background:#b7bec4;color:#f7f7f7;cursor:not-allowed;filter:none}
+.ixn-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding-top:15px;border-top:1px solid #edf0f2}.ixn-actions form{margin:0}.ixn-button{display:inline-block;padding:9px 15px;border:1px solid #1269a9;border-radius:5px;background:#1678c2;color:#fff;cursor:pointer;font-weight:600;text-decoration:none}.ixn-button:hover{filter:brightness(.96)}.ixn-button-secondary{background:#fff;color:#1678c2}.ixn-button[disabled]{border-color:#b7bec4;background:#b7bec4;color:#f7f7f7;cursor:not-allowed;filter:none}
 .ixn-config-form{display:inline}.ixn-config-button{padding:9px 15px;border:1px solid #1269a9;border-radius:5px;background:#fff;color:#1678c2;cursor:pointer;font-weight:600}.ixn-muted{color:#68737d}.ixn-success{color:#1b5e20;font-weight:600}
 .ixn-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.ixn-metric{padding:12px;border:1px solid #e2e6e9;border-radius:7px;background:#fafbfc;text-align:center}.ixn-metric strong{display:block;font-size:1.35em;line-height:1.2}.ixn-metric span{display:block;margin-top:4px;color:#68737d;font-size:.84em}
 .ixn-manual-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}.ixn-manual-copy p{margin:5px 0}.ixn-manual-action{text-align:right}.ixn-manual-action form{margin:0}
@@ -428,7 +448,7 @@ if ((int) $cleanup_stats['review'] > 0) {
 } elseif ((int) $cleanup_stats['failed'] > 0) {
     $display .= '<div class="ixn-status ixn-error"><strong>Cleanup failures require attention</strong><div>Failed remediation entries remain visible below and can be audited again.</div></div>';
 } elseif ((int) $cleanup_stats['pending'] > 0) {
-    $display .= '<div class="ixn-status ixn-warning"><strong>Cleanup is pending</strong><div>' . $LANG_indexnow['cleanup_schedule_help'] . '</div></div>';
+    $display .= '<div class="ixn-status ixn-warning"><strong>Cleanup is pending</strong><div>Pending remediation will be processed automatically by the next IndexNow scheduled task, or you can run one cleanup batch now.</div></div>';
 } else {
     $display .= '<div class="ixn-status ixn-ok"><strong>No pending remediation</strong><div>The cleanup queue currently requires no action.</div></div>';
 }
@@ -453,7 +473,16 @@ if ($cleanup_stats['last_audit'] !== '') {
     $display .= $LANG_indexnow['cleanup_never_audited'];
 }
 $display .= '</dd></dl>';
-$display .= '<div class="ixn-actions"><form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_security_audit" class="ixn-button">' . $LANG_indexnow['cleanup_run'] . '</button></form></div></section>';
+$display .= '<div class="ixn-actions">';
+$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_security_audit" class="ixn-button ixn-button-secondary">' . $LANG_indexnow['cleanup_run'] . '</button></form>';
+$cleanupDisabled = ((int) $cleanup_stats['pending'] <= 0 || !$submission_ready) ? ' disabled="disabled"' : '';
+$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_cleanup_now" class="ixn-button"' . $cleanupDisabled . '>Run cleanup now</button></form>';
+if ((int) $cleanup_stats['pending'] > 0 && !$submission_ready) {
+    $display .= '<span class="ixn-muted">Complete the IndexNow key verification before running cleanup manually.</span>';
+} elseif ((int) $cleanup_stats['pending'] > 100) {
+    $display .= '<span class="ixn-muted">Runs one batch of up to 100 URLs. Remaining URLs stay queued for the next batch or scheduled task.</span>';
+}
+$display .= '</div></section>';
 
 $display .= '</div>';
 
