@@ -11,6 +11,11 @@ if (strpos(strtolower($_SERVER['PHP_SELF']), 'install_updates.php') !== false) {
     die('This file cannot be used on its own!');
 }
 
+// Make the cleanup table available on every request, not only during upgrades.
+if (isset($_DB_table_prefix)) {
+    $_TABLES['indexnow_cleanup'] = $_DB_table_prefix . 'indexnow_cleanup';
+}
+
 // Load remediation helpers after all core plugin functions have been declared.
 if (isset($_CONF['path'])) {
     require_once $_CONF['path'] . 'plugins/indexnow/cleanup.php';
@@ -71,9 +76,6 @@ function indexnow_update_ConfigSecurity_1_1_1()
     return true;
 }
 
-/**
- * Return whether the IndexNow submission history table exists.
- */
 function indexnow_submission_table_exists()
 {
     global $_TABLES;
@@ -88,10 +90,6 @@ function indexnow_submission_table_exists()
     return ($result && DB_numRows($result) > 0);
 }
 
-/**
- * Add the submission history table and retention configuration.
- * Safe to call more than once and suitable as a repair step.
- */
 function indexnow_update_1_2_0()
 {
     global $_CONF, $_TABLES;
@@ -137,13 +135,6 @@ function indexnow_update_1_2_0()
     return true;
 }
 
-/**
- * Create the 1.2.1 cleanup queue and perform the local security audit.
- * This routine never performs an external HTTP request.
- *
- * @param bool $legacyUnverifiable Whether the previous version predates 1.2.0
- * @return bool
- */
 function indexnow_update_1_2_1($legacyUnverifiable = false)
 {
     global $_TABLES, $_DB_table_prefix;
@@ -179,8 +170,7 @@ function indexnow_update_1_2_1($legacyUnverifiable = false)
         }
     }
 
-    // The audit is intentionally local-only. Only URLs proven by the history
-    // to have been submitted successfully may enter the remediation queue.
+    // No external request is allowed during the Geeklog upgrade itself.
     indexnow_audit_submitted_urls((bool) $legacyUnverifiable);
 
     return true;
@@ -193,7 +183,6 @@ function plugin_upgrade_indexnow()
     $installed_version = DB_getItem($_TABLES['plugins'], 'pi_version', "pi_name = 'indexnow'");
     $code_version = plugin_chkVersion_indexnow();
 
-    // 1.2.0 introduced the submission-history table. Always verify it first.
     if (version_compare($code_version, '1.2.0', '>=')) {
         if (!indexnow_update_1_2_0()) {
             return false;
@@ -201,8 +190,6 @@ function plugin_upgrade_indexnow()
     }
 
     if ($installed_version == $code_version) {
-        // Also self-heal the 1.2.1 cleanup table if files were replaced before
-        // Geeklog's upgrade routine ran.
         if (version_compare($code_version, '1.2.1', '>=')) {
             return indexnow_update_1_2_1(false);
         }
