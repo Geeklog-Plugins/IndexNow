@@ -62,7 +62,7 @@ function INDEXNOW_detectXmlSitemapIntegration()
     }
 
     $config = config::get_instance();
-    if (!$config->group_exists('xmlsitemap')) {
+    if (method_exists($config, 'group_exists') && !$config->group_exists('xmlsitemap')) {
         return $state;
     }
 
@@ -102,18 +102,32 @@ function INDEXNOW_getSubmissionListField($fieldName, $fieldValue, $A, $iconArray
             return htmlspecialchars($item, ENT_QUOTES, 'UTF-8');
 
         case 'event':
-            return htmlspecialchars(ucfirst((string) $fieldValue), ENT_QUOTES, 'UTF-8');
+            $event = strtolower(trim((string) $fieldValue));
+            $eventLabels = array(
+                'saved' => $LANG_indexnow['event_saved'],
+                'deleted' => $LANG_indexnow['event_deleted'],
+                'manual' => $LANG_indexnow['event_manual'],
+                'scheduled' => $LANG_indexnow['event_scheduled'],
+                'cleanup' => $LANG_indexnow['event_cleanup']
+            );
+            $label = isset($eventLabels[$event]) ? $eventLabels[$event] : $fieldValue;
+            return htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8');
 
         case 'status':
             $status = strtolower(trim((string) $fieldValue));
             $class = 'ixn-badge ixn-badge-skipped';
+            $label = $status;
             if ($status === 'success') {
                 $class = 'ixn-badge ixn-badge-success';
+                $label = $LANG_indexnow['status_success'];
             } elseif ($status === 'failed') {
                 $class = 'ixn-badge ixn-badge-failed';
+                $label = $LANG_indexnow['status_failed'];
+            } elseif ($status === 'skipped') {
+                $label = $LANG_indexnow['status_skipped'];
             }
             return '<span class="' . $class . '">' .
-                htmlspecialchars($status, ENT_QUOTES, 'UTF-8') . '</span>';
+                htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') . '</span>';
 
         case 'http_code':
             return ((int) $fieldValue > 0) ? (string) (int) $fieldValue : '&mdash;';
@@ -183,17 +197,17 @@ function INDEXNOW_submissionFilters(&$defaultFilter, &$pageNavUrl)
 
     $statusOptions = array(
         'all' => $LANG_indexnow['filter_all_statuses'],
-        'success' => 'Success',
-        'failed' => 'Failed',
-        'skipped' => 'Skipped'
+        'success' => $LANG_indexnow['status_success'],
+        'failed' => $LANG_indexnow['status_failed'],
+        'skipped' => $LANG_indexnow['status_skipped']
     );
     $eventOptions = array(
         'all' => $LANG_indexnow['filter_all_events'],
-        'saved' => 'Saved',
-        'deleted' => 'Deleted',
-        'manual' => 'Manual',
-        'scheduled' => 'Scheduled',
-        'cleanup' => 'Cleanup'
+        'saved' => $LANG_indexnow['event_saved'],
+        'deleted' => $LANG_indexnow['event_deleted'],
+        'manual' => $LANG_indexnow['event_manual'],
+        'scheduled' => $LANG_indexnow['event_scheduled'],
+        'cleanup' => $LANG_indexnow['event_cleanup']
     );
 
     $filter = '<div class="ixn-native-filters">';
@@ -309,9 +323,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_cleanup_now']) &&
         $completedCleanup = max(0, (int) $afterCleanup['completed'] - (int) $beforeCleanup['completed']);
         $failedCleanup = max(0, (int) $afterCleanup['failed'] - (int) $beforeCleanup['failed']);
         $pendingCleanup = (int) $afterCleanup['pending'];
-        $cleanupMessage = $processedCleanup . ' remediation URL(s) processed: ' .
-            $completedCleanup . ' completed, ' . $failedCleanup . ' failed, ' .
-            $pendingCleanup . ' still pending.';
+        $cleanupMessage = sprintf(
+            $LANG_indexnow['cleanup_run_result'],
+            $processedCleanup,
+            $completedCleanup,
+            $failedCleanup,
+            $pendingCleanup
+        );
         $feedback = COM_showMessageText($cleanupMessage, $LANG_indexnow['cleanup_title']);
     } catch (Exception $e) {
         $feedback = COM_showMessageText(
@@ -378,12 +396,12 @@ $cleanup_attention = ((int) $cleanup_stats['pending'] > 0 || (int) $cleanup_stat
 $cleanup_summary_class = $cleanup_attention ? 'ixn-summary-warning' : 'ixn-summary-ok';
 $cleanup_summary_value = (int) $cleanup_stats['pending'];
 $config_summary_class = $submission_ready ? 'ixn-summary-ok' : 'ixn-summary-error';
-$config_summary_value = $submission_ready ? 'Ready' : 'Attention';
+$config_summary_value = $submission_ready ? $LANG_indexnow['summary_ready'] : $LANG_indexnow['summary_attention'];
 $coexistence_summary_class = $xmlsitemap_state['conflict'] ? 'ixn-summary-warning' : 'ixn-summary-ok';
-$coexistence_summary_value = $xmlsitemap_state['conflict'] ? 'Attention' : 'Compatible';
+$coexistence_summary_value = $xmlsitemap_state['conflict'] ? $LANG_indexnow['summary_attention'] : $LANG_indexnow['summary_compatible'];
 $coexistence_summary_note = $xmlsitemap_state['conflict']
-    ? 'XMLSitemap IndexNow is also enabled'
-    : 'No duplicate IndexNow provider detected';
+    ? $LANG_indexnow['summary_coexistence_conflict']
+    : $LANG_indexnow['summary_coexistence_ok'];
 
 $display = '<style>
 .ixn-admin{max-width:1500px;margin:0 auto}
@@ -414,16 +432,16 @@ if ($feedback !== '') {
     $display .= $feedback;
 }
 
-$display .= '<div class="ixn-summary-grid" aria-label="IndexNow administration summary">';
-$display .= '<div class="ixn-summary ' . $config_summary_class . '"><span class="ixn-summary-label">IndexNow</span><span class="ixn-summary-value">' . $config_summary_value . '</span><span class="ixn-summary-note">' . htmlspecialchars($status_title, ENT_QUOTES, 'UTF-8') . '</span></div>';
-$display .= '<div class="ixn-summary ' . $coexistence_summary_class . '"><span class="ixn-summary-label">Geeklog coexistence</span><span class="ixn-summary-value">' . $coexistence_summary_value . '</span><span class="ixn-summary-note">' . htmlspecialchars($coexistence_summary_note, ENT_QUOTES, 'UTF-8') . '</span></div>';
-$display .= '<div class="ixn-summary ' . $cleanup_summary_class . '"><span class="ixn-summary-label">Security cleanup</span><span class="ixn-summary-value">' . $cleanup_summary_value . '</span><span class="ixn-summary-note">Pending remediation</span></div>';
-$display .= '<div class="ixn-summary"><span class="ixn-summary-label">Articles</span><span class="ixn-summary-value">' . (int) $total_articles . '</span><span class="ixn-summary-note">Available for manual submission</span></div>';
+$display .= '<div class="ixn-summary-grid" aria-label="' . htmlspecialchars($LANG_indexnow['summary_aria'], ENT_QUOTES, 'UTF-8') . '">';
+$display .= '<div class="ixn-summary ' . $config_summary_class . '"><span class="ixn-summary-label">IndexNow</span><span class="ixn-summary-value">' . htmlspecialchars($config_summary_value, ENT_QUOTES, 'UTF-8') . '</span><span class="ixn-summary-note">' . htmlspecialchars($status_title, ENT_QUOTES, 'UTF-8') . '</span></div>';
+$display .= '<div class="ixn-summary ' . $coexistence_summary_class . '"><span class="ixn-summary-label">' . $LANG_indexnow['summary_coexistence'] . '</span><span class="ixn-summary-value">' . htmlspecialchars($coexistence_summary_value, ENT_QUOTES, 'UTF-8') . '</span><span class="ixn-summary-note">' . htmlspecialchars($coexistence_summary_note, ENT_QUOTES, 'UTF-8') . '</span></div>';
+$display .= '<div class="ixn-summary ' . $cleanup_summary_class . '"><span class="ixn-summary-label">' . $LANG_indexnow['summary_security_cleanup'] . '</span><span class="ixn-summary-value">' . $cleanup_summary_value . '</span><span class="ixn-summary-note">' . $LANG_indexnow['summary_pending_remediation'] . '</span></div>';
+$display .= '<div class="ixn-summary"><span class="ixn-summary-label">' . $LANG_indexnow['summary_articles'] . '</span><span class="ixn-summary-value">' . (int) $total_articles . '</span><span class="ixn-summary-note">' . $LANG_indexnow['summary_articles_available'] . '</span></div>';
 $display .= '</div>';
 
 $display .= '<div class="ixn-layout">';
 
-$display .= '<section class="ixn-card"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['configuration_status'] . '</h2><p class="ixn-card-subtitle">Key, verification file and plugin runtime settings.</p></div></div>';
+$display .= '<section class="ixn-card"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['configuration_status'] . '</h2><p class="ixn-card-subtitle">' . $LANG_indexnow['configuration_subtitle'] . '</p></div></div>';
 $display .= '<div class="ixn-status ' . $status_class . '"><strong>' . $status_title . '</strong>';
 if ($status_help !== '') {
     $display .= '<div>' . $status_help . '</div>';
@@ -437,20 +455,20 @@ if ($key_status['key_valid']) {
     $display .= '<dt>' . $LANG_indexnow['public_url'] . '</dt><dd><a href="' . htmlspecialchars($key_status['file_url'], ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener noreferrer">' . htmlspecialchars($key_status['file_url'], ENT_QUOTES, 'UTF-8') . '</a></dd>';
 }
 $display .= '<dt>' . $LANG_indexnow['debug_status'] . '</dt><dd>' . ($debug_enabled ? $LANG_indexnow['debug_enabled'] : $LANG_indexnow['debug_disabled']) . '</dd>';
-$display .= '<dt>' . $LANG_indexnow['history_retention'] . '</dt><dd>' . ($retention_days > 0 ? (int) $retention_days . ' days' : 'Unlimited') . '</dd>';
+$display .= '<dt>' . $LANG_indexnow['history_retention'] . '</dt><dd>' . ($retention_days > 0 ? sprintf($LANG_indexnow['history_retention_days'], $retention_days) : $LANG_indexnow['history_retention_unlimited']) . '</dd>';
 $display .= '<dt>' . $LANG_indexnow['error_log'] . '</dt><dd><code>' . htmlspecialchars($error_log_path, ENT_QUOTES, 'UTF-8') . '</code></dd></dl>';
 $config_url = $_CONF['site_admin_url'] . '/configuration.php';
 $display .= '<div class="ixn-actions"><form class="ixn-config-form" method="post" action="' . htmlspecialchars($config_url, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="conf_group" value="indexnow"><button type="submit" class="ixn-config-button">' . $LANG_indexnow['open_configuration'] . '</button></form></div></section>';
 
-$display .= '<section class="ixn-card"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['cleanup_title'] . '</h2><p class="ixn-card-subtitle">Review previously submitted URLs that may no longer be public.</p></div></div>';
+$display .= '<section class="ixn-card"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['cleanup_title'] . '</h2><p class="ixn-card-subtitle">' . $LANG_indexnow['cleanup_subtitle'] . '</p></div></div>';
 if ((int) $cleanup_stats['review'] > 0) {
-    $display .= '<div class="ixn-status ixn-warning"><strong>Administrator review required</strong><div>' . $LANG_indexnow['cleanup_legacy_warning'] . '</div></div>';
+    $display .= '<div class="ixn-status ixn-warning"><strong>' . $LANG_indexnow['cleanup_review_required'] . '</strong><div>' . $LANG_indexnow['cleanup_legacy_warning'] . '</div></div>';
 } elseif ((int) $cleanup_stats['failed'] > 0) {
-    $display .= '<div class="ixn-status ixn-error"><strong>Cleanup failures require attention</strong><div>Failed remediation entries remain visible below and can be audited again.</div></div>';
+    $display .= '<div class="ixn-status ixn-error"><strong>' . $LANG_indexnow['cleanup_failures_title'] . '</strong><div>' . $LANG_indexnow['cleanup_failures_help'] . '</div></div>';
 } elseif ((int) $cleanup_stats['pending'] > 0) {
-    $display .= '<div class="ixn-status ixn-warning"><strong>Cleanup is pending</strong><div>Pending remediation will be processed automatically by the next IndexNow scheduled task, or you can run one cleanup batch now.</div></div>';
+    $display .= '<div class="ixn-status ixn-warning"><strong>' . $LANG_indexnow['cleanup_pending_title'] . '</strong><div>' . $LANG_indexnow['cleanup_pending_help'] . '</div></div>';
 } else {
-    $display .= '<div class="ixn-status ixn-ok"><strong>No pending remediation</strong><div>The cleanup queue currently requires no action.</div></div>';
+    $display .= '<div class="ixn-status ixn-ok"><strong>' . $LANG_indexnow['cleanup_none_title'] . '</strong><div>' . $LANG_indexnow['cleanup_none_help'] . '</div></div>';
 }
 $display .= '<div class="ixn-metrics">';
 $display .= '<div class="ixn-metric"><strong>' . (int) $cleanup_stats['pending'] . '</strong><span>' . $LANG_indexnow['cleanup_pending'] . '</span></div>';
@@ -476,50 +494,50 @@ $display .= '</dd></dl>';
 $display .= '<div class="ixn-actions">';
 $display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_security_audit" class="ixn-button ixn-button-secondary">' . $LANG_indexnow['cleanup_run'] . '</button></form>';
 $cleanupDisabled = ((int) $cleanup_stats['pending'] <= 0 || !$submission_ready) ? ' disabled="disabled"' : '';
-$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_cleanup_now" class="ixn-button"' . $cleanupDisabled . '>Run cleanup now</button></form>';
+$display .= '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_cleanup_now" class="ixn-button"' . $cleanupDisabled . '>' . $LANG_indexnow['cleanup_run_now'] . '</button></form>';
 if ((int) $cleanup_stats['pending'] > 0 && !$submission_ready) {
-    $display .= '<span class="ixn-muted">Complete the IndexNow key verification before running cleanup manually.</span>';
+    $display .= '<span class="ixn-muted">' . $LANG_indexnow['cleanup_key_required'] . '</span>';
 } elseif ((int) $cleanup_stats['pending'] > 100) {
-    $display .= '<span class="ixn-muted">Runs one batch of up to 100 URLs. Remaining URLs stay queued for the next batch or scheduled task.</span>';
+    $display .= '<span class="ixn-muted">' . $LANG_indexnow['cleanup_batch_help'] . '</span>';
 }
 $display .= '</div></section>';
 
 $display .= '</div>';
 
-$display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>Geeklog / XMLSitemap integration</h2><p class="ixn-card-subtitle">Keep XMLSitemap for sitemap generation while assigning IndexNow notifications to a single provider.</p></div></div>';
+$display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['coexistence_title'] . '</h2><p class="ixn-card-subtitle">' . $LANG_indexnow['coexistence_subtitle'] . '</p></div></div>';
 $display .= '<div class="ixn-coexistence"><div>';
 if (!$xmlsitemap_state['installed']) {
-    $display .= '<div class="ixn-status ixn-ok"><strong>No XMLSitemap overlap detected</strong><div>XMLSitemap is not installed, so this plugin is the only detected IndexNow provider.</div></div>';
+    $display .= '<div class="ixn-status ixn-ok"><strong>' . $LANG_indexnow['coexistence_no_overlap_title'] . '</strong><div>' . $LANG_indexnow['coexistence_no_overlap_help'] . '</div></div>';
 } elseif (!$xmlsitemap_state['enabled']) {
-    $display .= '<div class="ixn-status ixn-ok"><strong>XMLSitemap is disabled</strong><div>No duplicate IndexNow submission can occur while XMLSitemap is disabled.</div></div>';
+    $display .= '<div class="ixn-status ixn-ok"><strong>' . $LANG_indexnow['coexistence_disabled_title'] . '</strong><div>' . $LANG_indexnow['coexistence_disabled_help'] . '</div></div>';
 } elseif (!$xmlsitemap_state['indexnow_supported']) {
-    $display .= '<div class="ixn-status ixn-ok"><strong>Compatible XMLSitemap configuration</strong><div>This XMLSitemap installation does not expose its own IndexNow setting. The dedicated IndexNow plugin can operate without overlap.</div></div>';
+    $display .= '<div class="ixn-status ixn-ok"><strong>' . $LANG_indexnow['coexistence_compatible_title'] . '</strong><div>' . $LANG_indexnow['coexistence_compatible_help'] . '</div></div>';
 } elseif ($xmlsitemap_state['conflict']) {
-    $display .= '<div class="ixn-status ixn-warning"><strong>Duplicate IndexNow provider detected</strong><div>XMLSitemap and the dedicated IndexNow plugin are both configured to submit changed URLs. Disable only XMLSitemap\'s IndexNow option to avoid duplicate requests and inconsistent submission history.</div></div>';
+    $display .= '<div class="ixn-status ixn-warning"><strong>' . $LANG_indexnow['coexistence_conflict_title'] . '</strong><div>' . $LANG_indexnow['coexistence_conflict_help'] . '</div></div>';
 } else {
-    $display .= '<div class="ixn-status ixn-ok"><strong>Recommended coexistence is active</strong><div>XMLSitemap remains enabled for sitemap generation and its IndexNow option is disabled. The dedicated plugin is the single IndexNow notification provider.</div></div>';
+    $display .= '<div class="ixn-status ixn-ok"><strong>' . $LANG_indexnow['coexistence_recommended_title'] . '</strong><div>' . $LANG_indexnow['coexistence_recommended_help'] . '</div></div>';
 }
 $display .= '<dl class="ixn-details">';
-$display .= '<dt>XMLSitemap</dt><dd>' . ($xmlsitemap_state['installed'] ? 'Installed' : 'Not installed') . ($xmlsitemap_state['version'] !== '' ? ' &mdash; v' . htmlspecialchars($xmlsitemap_state['version'], ENT_QUOTES, 'UTF-8') : '') . '</dd>';
+$display .= '<dt>XMLSitemap</dt><dd>' . ($xmlsitemap_state['installed'] ? $LANG_indexnow['coexistence_installed'] : $LANG_indexnow['coexistence_not_installed']) . ($xmlsitemap_state['version'] !== '' ? ' &mdash; v' . htmlspecialchars($xmlsitemap_state['version'], ENT_QUOTES, 'UTF-8') : '') . '</dd>';
 if ($xmlsitemap_state['installed']) {
-    $display .= '<dt>Plugin state</dt><dd>' . ($xmlsitemap_state['enabled'] ? 'Enabled' : 'Disabled') . '</dd>';
-    $display .= '<dt>Native IndexNow support</dt><dd>' . ($xmlsitemap_state['indexnow_supported'] ? 'Available' : 'Not detected') . '</dd>';
+    $display .= '<dt>' . $LANG_indexnow['coexistence_plugin_state'] . '</dt><dd>' . ($xmlsitemap_state['enabled'] ? $LANG_indexnow['coexistence_enabled'] : $LANG_indexnow['coexistence_disabled']) . '</dd>';
+    $display .= '<dt>' . $LANG_indexnow['coexistence_native_support'] . '</dt><dd>' . ($xmlsitemap_state['indexnow_supported'] ? $LANG_indexnow['coexistence_available'] : $LANG_indexnow['coexistence_not_detected']) . '</dd>';
     if ($xmlsitemap_state['indexnow_supported']) {
-        $display .= '<dt>XMLSitemap IndexNow</dt><dd>' . ($xmlsitemap_state['indexnow_enabled'] ? '<strong>Enabled</strong>' : 'Disabled') . '</dd>';
+        $display .= '<dt>' . $LANG_indexnow['coexistence_indexnow_label'] . '</dt><dd>' . ($xmlsitemap_state['indexnow_enabled'] ? '<strong>' . $LANG_indexnow['coexistence_enabled'] . '</strong>' : $LANG_indexnow['coexistence_disabled']) . '</dd>';
     }
 }
 $display .= '</dl></div>';
-$display .= '<aside class="ixn-coexistence-note"><strong>Recommended responsibility split</strong>XMLSitemap should continue generating XML and News sitemaps. This dedicated plugin should handle IndexNow notifications, history, permission checks and security remediation. The IndexNow plugin never changes XMLSitemap settings automatically.</aside></div>';
+$display .= '<aside class="ixn-coexistence-note"><strong>' . $LANG_indexnow['coexistence_split_title'] . '</strong>' . $LANG_indexnow['coexistence_split_help'] . '</aside></div>';
 if ($xmlsitemap_state['installed'] && $xmlsitemap_state['indexnow_supported']) {
-    $display .= '<div class="ixn-actions"><form class="ixn-config-form" method="post" action="' . htmlspecialchars($config_url, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="conf_group" value="xmlsitemap"><button type="submit" class="ixn-config-button">Open XMLSitemap configuration</button></form>';
+    $display .= '<div class="ixn-actions"><form class="ixn-config-form" method="post" action="' . htmlspecialchars($config_url, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="conf_group" value="xmlsitemap"><button type="submit" class="ixn-config-button">' . $LANG_indexnow['coexistence_open_configuration'] . '</button></form>';
     if ($xmlsitemap_state['conflict']) {
-        $display .= '<span class="ixn-muted">Set <strong>Enable IndexNow</strong> to False. Do not disable XMLSitemap itself.</span>';
+        $display .= '<span class="ixn-muted">' . $LANG_indexnow['coexistence_disable_instruction'] . '</span>';
     }
     $display .= '</div>';
 }
 $display .= '</section>';
 
-$display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['manual_submission'] . '</h2><p class="ixn-card-subtitle">Submit public articles in controlled batches of ' . (int) $batch_size . ' URLs.</p></div></div>';
+$display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['manual_submission'] . '</h2><p class="ixn-card-subtitle">' . sprintf($LANG_indexnow['manual_submission_subtitle'], $batch_size) . '</p></div></div>';
 $display .= '<div class="ixn-manual-row"><div class="ixn-manual-copy"><p><strong>' . sprintf($LANG_indexnow['total_articles'], $total_articles) . '</strong></p>';
 if ($submitted_range !== '') {
     $display .= '<p class="ixn-success">' . $submitted_range . '</p>';
