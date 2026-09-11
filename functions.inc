@@ -207,11 +207,6 @@ function indexnow_call_idtourl($function, $sub_type, $id)
     return trim((string) $function($id));
 }
 
-/**
- * Resolve a plugin-owned URL as the anonymous user (uid 1).
- * PLG_getItemInfo only returns an URL when that user has access. For security,
- * saved plugin items without this permission-aware callback are not submitted.
- */
 function indexnow_resolve_saved_plugin_url($type, $id, $sub_type = '')
 {
     $function = 'plugin_getiteminfo_' . $type;
@@ -305,7 +300,7 @@ function indexnow_previous_public_url($type, $id)
 
 function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
 {
-    global $_CONF, $_INDEXNOW_CONF;
+    global $_CONF, $_INDEXNOW_CONF, $LANG_indexnow;
 
     $url = '';
     $key = isset($_INDEXNOW_CONF['indexnow_key']) ? trim($_INDEXNOW_CONF['indexnow_key']) : '';
@@ -323,8 +318,7 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
                 send_to_indexnow($previousUrl, $context);
             } else {
                 indexnow_log("Article not submitted because it is not anonymously readable (ID: $id).", true);
-                indexnow_record_submission($context, $url, false, 0, 'skipped',
-                    'Private content: anonymous read access is not available.');
+                indexnow_record_submission($context, $url, false, 0, 'skipped', $LANG_indexnow['history_private_content']);
             }
             return;
         }
@@ -340,8 +334,7 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
                 send_to_indexnow($previousUrl, $context);
             } else {
                 indexnow_log("Static page not submitted because it is not anonymously readable (ID: $id).", true);
-                indexnow_record_submission($context, $url, false, 0, 'skipped',
-                    'Private content: anonymous read access is not available.');
+                indexnow_record_submission($context, $url, false, 0, 'skipped', $LANG_indexnow['history_private_content']);
             }
             return;
         }
@@ -355,8 +348,7 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
                 send_to_indexnow($previousUrl, $context);
             } else {
                 indexnow_log("Topic not submitted because it is not anonymously readable (ID: $id).", true);
-                indexnow_record_submission($context, $url, false, 0, 'skipped',
-                    'Private content: anonymous read access is not available.');
+                indexnow_record_submission($context, $url, false, 0, 'skipped', $LANG_indexnow['history_private_content']);
             }
             return;
         }
@@ -369,8 +361,7 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
                 send_to_indexnow($previousUrl, $context);
             } else {
                 indexnow_log("Plugin item not submitted because anonymous access cannot be verified (type: $type, ID: $id).", true);
-                indexnow_record_submission($context, '', false, 0, 'skipped',
-                    'Private or unverifiable plugin content: anonymous URL access is required.');
+                indexnow_record_submission($context, '', false, 0, 'skipped', $LANG_indexnow['history_private_plugin_content']);
             }
             return;
         }
@@ -378,14 +369,13 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
 
     if (indexnow_validate_url($url) === false) {
         indexnow_log("Rejected unsafe or foreign URL (type: $type, ID: $id, URL: $url).", true);
-        indexnow_record_submission($context, $url, false, 0, 'failed',
-            'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+        indexnow_record_submission($context, $url, false, 0, 'failed', $LANG_indexnow['history_url_rejected']);
         return;
     }
 
     if ($key === '') {
         indexnow_log("Save resolved but not submitted: no key configured (type: $type, ID: $id, URL: $url).", true);
-        indexnow_record_submission($context, $url, false, 0, 'skipped', 'No IndexNow key configured.');
+        indexnow_record_submission($context, $url, false, 0, 'skipped', $LANG_indexnow['history_no_key']);
         return;
     }
 
@@ -394,7 +384,7 @@ function plugin_itemsaved_indexnow($id, $type, $old_id = '', $sub_type = '')
 
 function plugin_itemdeleted_indexnow($id, $type, $sub_type = '')
 {
-    global $_CONF, $_INDEXNOW_CONF;
+    global $_INDEXNOW_CONF, $LANG_indexnow;
 
     $key = isset($_INDEXNOW_CONF['indexnow_key']) ? trim($_INDEXNOW_CONF['indexnow_key']) : '';
     $context = indexnow_submission_context($type, $id, $sub_type, 'deleted');
@@ -402,21 +392,19 @@ function plugin_itemdeleted_indexnow($id, $type, $sub_type = '')
     $url = indexnow_previous_public_url($type, $id);
     if ($url === '') {
         indexnow_log("Deleted item not submitted because no previous public submission exists (type: $type, ID: $id).", true);
-        indexnow_record_submission($context, '', false, 0, 'skipped',
-            'Deletion not submitted: no previous successful public submission exists.');
+        indexnow_record_submission($context, '', false, 0, 'skipped', $LANG_indexnow['history_delete_not_submitted']);
         return;
     }
 
     if (indexnow_validate_url($url) === false) {
         indexnow_log("Rejected unsafe previous URL for deleted item (type: $type, ID: $id, URL: $url).", true);
-        indexnow_record_submission($context, $url, false, 0, 'failed',
-            'URL rejected: previous URL is no longer valid for this Geeklog host.');
+        indexnow_record_submission($context, $url, false, 0, 'failed', $LANG_indexnow['history_previous_url_rejected']);
         return;
     }
 
     if ($key === '') {
         indexnow_log("Delete resolved but not submitted: no key configured (type: $type, ID: $id, URL: $url).", true);
-        indexnow_record_submission($context, $url, false, 0, 'skipped', 'No IndexNow key configured.');
+        indexnow_record_submission($context, $url, false, 0, 'skipped', $LANG_indexnow['history_no_key']);
         return;
     }
 
@@ -438,7 +426,7 @@ function indexnow_apply_curl_security($ch)
 
 function send_to_indexnow($url, $context = array())
 {
-    global $_CONF, $_INDEXNOW_CONF;
+    global $_CONF, $_INDEXNOW_CONF, $LANG_indexnow;
 
     $key = isset($_INDEXNOW_CONF['indexnow_key']) ? trim($_INDEXNOW_CONF['indexnow_key']) : '';
     $validatedKey = indexnow_validate_key($key);
@@ -447,14 +435,13 @@ function send_to_indexnow($url, $context = array())
         $validatedUrl = indexnow_validate_url($url);
         if ($validatedUrl === false) {
             indexnow_log('IndexNow: Rejected unsafe or foreign URL: ' . $url, true);
-            indexnow_record_submission($context, $url, false, 0, 'failed',
-                'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+            indexnow_record_submission($context, $url, false, 0, 'failed', $LANG_indexnow['history_url_rejected']);
             return false;
         }
         $url = $validatedUrl;
 
         if ($validatedKey === false) {
-            $message = ($key === '') ? 'No IndexNow key configured.' : 'Invalid IndexNow key configured.';
+            $message = ($key === '') ? $LANG_indexnow['history_no_key'] : $LANG_indexnow['history_invalid_key'];
             indexnow_log('IndexNow: ' . $message, true);
             indexnow_record_submission($context, $url, false, 0, 'skipped', $message);
             return false;
@@ -477,8 +464,8 @@ function send_to_indexnow($url, $context = array())
         curl_close($ch);
 
         $success = ($response !== false && ($httpCode === 200 || $httpCode === 202));
-        $message = $success ? 'IndexNow accepted the URL.' :
-            ('IndexNow request failed.' . ($curlError !== '' ? ' cURL: ' . $curlError : ''));
+        $message = $success ? $LANG_indexnow['history_url_accepted'] :
+            ($LANG_indexnow['history_request_failed'] . ($curlError !== '' ? ' cURL: ' . $curlError : ''));
         indexnow_record_submission($context, $url, true, $httpCode, $success ? 'success' : 'failed', $message);
 
         if ($success) {
@@ -505,8 +492,7 @@ function send_to_indexnow($url, $context = array())
             $validatedUrl = indexnow_validate_url($batchUrl);
             if ($validatedUrl === false) {
                 indexnow_log('IndexNow: Rejected unsafe or foreign batch URL: ' . $batchUrl, true);
-                indexnow_record_submission($rowContext, $batchUrl, false, 0, 'failed',
-                    'URL rejected: URL must use HTTP(S) and belong to the Geeklog site host.');
+                indexnow_record_submission($rowContext, $batchUrl, false, 0, 'failed', $LANG_indexnow['history_url_rejected']);
                 continue;
             }
 
@@ -519,7 +505,7 @@ function send_to_indexnow($url, $context = array())
         }
 
         if ($validatedKey === false) {
-            $message = ($key === '') ? 'No IndexNow key configured.' : 'Invalid IndexNow key configured.';
+            $message = ($key === '') ? $LANG_indexnow['history_no_key'] : $LANG_indexnow['history_invalid_key'];
             foreach ($validUrls as $index => $batchUrl) {
                 indexnow_record_submission($batchContexts[$index], $batchUrl, false, 0, 'skipped', $message);
             }
@@ -547,8 +533,8 @@ function send_to_indexnow($url, $context = array())
         curl_close($ch);
 
         $success = ($response !== false && ($httpCode === 200 || $httpCode === 202));
-        $message = $success ? 'IndexNow accepted the batch.' :
-            ('IndexNow batch request failed.' . ($curlError !== '' ? ' cURL: ' . $curlError : ''));
+        $message = $success ? $LANG_indexnow['history_batch_accepted'] :
+            ($LANG_indexnow['history_batch_failed'] . ($curlError !== '' ? ' cURL: ' . $curlError : ''));
 
         foreach ($validUrls as $index => $batchUrl) {
             $rowContext = $batchContexts[$index];
