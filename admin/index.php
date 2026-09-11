@@ -24,6 +24,60 @@ if (!SEC_hasRights('indexnow.admin')) {
 require_once $_CONF['path'] . 'plugins/indexnow/functions.inc';
 require_once $_CONF['path_system'] . 'lib-admin.php';
 
+/**
+ * Detect coexistence with Geeklog's bundled XMLSitemap IndexNow support.
+ * Detection is based on the actual installed plugin and configuration, not on
+ * the Geeklog version number, so separately upgraded XMLSitemap installations
+ * are handled correctly.
+ */
+function INDEXNOW_detectXmlSitemapIntegration()
+{
+    global $_CONF, $_TABLES;
+
+    $state = array(
+        'installed' => false,
+        'enabled' => false,
+        'version' => '',
+        'indexnow_supported' => false,
+        'indexnow_enabled' => false,
+        'conflict' => false
+    );
+
+    $result = DB_query(
+        "SELECT pi_version,pi_enabled FROM {$_TABLES['plugins']} " .
+        "WHERE pi_name='xmlsitemap' LIMIT 1"
+    );
+    if (!$result || DB_numRows($result) === 0) {
+        return $state;
+    }
+
+    $row = DB_fetchArray($result);
+    $state['installed'] = true;
+    $state['enabled'] = isset($row['pi_enabled']) && (int) $row['pi_enabled'] === 1;
+    $state['version'] = isset($row['pi_version']) ? (string) $row['pi_version'] : '';
+
+    require_once $_CONF['path_system'] . 'classes/config.class.php';
+    if (!class_exists('config')) {
+        return $state;
+    }
+
+    $config = config::get_instance();
+    if (!$config->group_exists('xmlsitemap')) {
+        return $state;
+    }
+
+    $xmlConfig = $config->get_config('xmlsitemap');
+    if (!is_array($xmlConfig) || !array_key_exists('indexnow', $xmlConfig)) {
+        return $state;
+    }
+
+    $state['indexnow_supported'] = true;
+    $state['indexnow_enabled'] = !empty($xmlConfig['indexnow']);
+    $state['conflict'] = $state['enabled'] && $state['indexnow_enabled'];
+
+    return $state;
+}
+
 function INDEXNOW_getSubmissionListField($fieldName, $fieldValue, $A, $iconArray)
 {
     global $LANG_indexnow;
@@ -217,6 +271,7 @@ if (function_exists('indexnow_cleanup_table_exists') && !indexnow_cleanup_table_
 }
 
 $key_status = indexnow_get_key_status();
+$xmlsitemap_state = INDEXNOW_detectXmlSitemapIntegration();
 $debug_enabled = isset($_INDEXNOW_CONF['debug_mode']) && (int) $_INDEXNOW_CONF['debug_mode'] === 1;
 $retention_days = isset($_INDEXNOW_CONF['history_retention_days']) ? (int) $_INDEXNOW_CONF['history_retention_days'] : 90;
 $error_log_path = rtrim($_CONF['path_log'], '/\\') . DIRECTORY_SEPARATOR . 'error.log';
@@ -304,10 +359,15 @@ $cleanup_summary_class = $cleanup_attention ? 'ixn-summary-warning' : 'ixn-summa
 $cleanup_summary_value = (int) $cleanup_stats['pending'];
 $config_summary_class = $submission_ready ? 'ixn-summary-ok' : 'ixn-summary-error';
 $config_summary_value = $submission_ready ? 'Ready' : 'Attention';
+$coexistence_summary_class = $xmlsitemap_state['conflict'] ? 'ixn-summary-warning' : 'ixn-summary-ok';
+$coexistence_summary_value = $xmlsitemap_state['conflict'] ? 'Attention' : 'Compatible';
+$coexistence_summary_note = $xmlsitemap_state['conflict']
+    ? 'XMLSitemap IndexNow is also enabled'
+    : 'No duplicate IndexNow provider detected';
 
 $display = '<style>
 .ixn-admin{max-width:1500px;margin:0 auto}
-.ixn-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 18px}
+.ixn-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 18px}
 .ixn-summary{position:relative;overflow:hidden;padding:16px 18px;border:1px solid #dfe3e8;border-radius:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .ixn-summary-label{display:block;margin-bottom:5px;color:#68737d;font-size:.9em;font-weight:600}.ixn-summary-value{display:block;font-size:1.6em;line-height:1.15;font-weight:700}.ixn-summary-note{display:block;margin-top:5px;color:#68737d;font-size:.86em}
 .ixn-summary:before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:#b9c2ca}.ixn-summary-ok:before{background:#2e7d32}.ixn-summary-warning:before{background:#d08a00}.ixn-summary-error:before{background:#c62828}
@@ -320,10 +380,12 @@ $display = '<style>
 .ixn-config-form{display:inline}.ixn-config-button{padding:9px 15px;border:1px solid #1269a9;border-radius:5px;background:#fff;color:#1678c2;cursor:pointer;font-weight:600}.ixn-muted{color:#68737d}.ixn-success{color:#1b5e20;font-weight:600}
 .ixn-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.ixn-metric{padding:12px;border:1px solid #e2e6e9;border-radius:7px;background:#fafbfc;text-align:center}.ixn-metric strong{display:block;font-size:1.35em;line-height:1.2}.ixn-metric span{display:block;margin-top:4px;color:#68737d;font-size:.84em}
 .ixn-manual-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}.ixn-manual-copy p{margin:5px 0}.ixn-manual-action{text-align:right}.ixn-manual-action form{margin:0}
+.ixn-coexistence{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(260px,.6fr);gap:24px;align-items:start}.ixn-coexistence-note{padding:14px 16px;border-radius:8px;background:#f7f9fa;color:#4d5963}.ixn-coexistence-note strong{display:block;margin-bottom:5px;color:#24313a}
 .ixn-history-wrap{margin-top:18px}.ixn-help{margin-top:18px;padding:15px 18px;border:1px solid #dfe3e8;border-radius:8px;background:#fafbfc}.ixn-help summary{cursor:pointer;font-weight:600}
 .ixn-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.9em;white-space:nowrap}.ixn-badge-success{background:#e8f5e9;color:#1b5e20}.ixn-badge-failed{background:#ffebee;color:#b71c1c}.ixn-badge-skipped{background:#fff8e1;color:#7a4f00}
 .ixn-native-filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}.ixn-native-filters label{white-space:nowrap}.ixn-native-filters select{margin-left:4px;max-width:180px}
-@media(max-width:900px){.ixn-summary-grid{grid-template-columns:1fr}.ixn-layout{grid-template-columns:1fr}.ixn-manual-row{grid-template-columns:1fr}.ixn-manual-action{text-align:left}.ixn-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1100px){.ixn-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.ixn-summary-grid{grid-template-columns:1fr}.ixn-layout,.ixn-coexistence{grid-template-columns:1fr}.ixn-manual-row{grid-template-columns:1fr}.ixn-manual-action{text-align:left}.ixn-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.ixn-card{padding:16px}.ixn-details{grid-template-columns:1fr;gap:3px}.ixn-details dd{margin-bottom:9px}.ixn-metrics{grid-template-columns:1fr 1fr}.ixn-native-filters{display:grid;grid-template-columns:1fr}.ixn-native-filters label{white-space:normal}.ixn-native-filters select{width:100%;max-width:none;margin:4px 0 0}.ixn-actions{align-items:stretch}.ixn-button,.ixn-config-button{width:100%;box-sizing:border-box;text-align:center}}
 </style>';
 
@@ -334,6 +396,7 @@ if ($feedback !== '') {
 
 $display .= '<div class="ixn-summary-grid" aria-label="IndexNow administration summary">';
 $display .= '<div class="ixn-summary ' . $config_summary_class . '"><span class="ixn-summary-label">IndexNow</span><span class="ixn-summary-value">' . $config_summary_value . '</span><span class="ixn-summary-note">' . htmlspecialchars($status_title, ENT_QUOTES, 'UTF-8') . '</span></div>';
+$display .= '<div class="ixn-summary ' . $coexistence_summary_class . '"><span class="ixn-summary-label">Geeklog coexistence</span><span class="ixn-summary-value">' . $coexistence_summary_value . '</span><span class="ixn-summary-note">' . htmlspecialchars($coexistence_summary_note, ENT_QUOTES, 'UTF-8') . '</span></div>';
 $display .= '<div class="ixn-summary ' . $cleanup_summary_class . '"><span class="ixn-summary-label">Security cleanup</span><span class="ixn-summary-value">' . $cleanup_summary_value . '</span><span class="ixn-summary-note">Pending remediation</span></div>';
 $display .= '<div class="ixn-summary"><span class="ixn-summary-label">Articles</span><span class="ixn-summary-value">' . (int) $total_articles . '</span><span class="ixn-summary-note">Available for manual submission</span></div>';
 $display .= '</div>';
@@ -393,6 +456,39 @@ $display .= '</dd></dl>';
 $display .= '<div class="ixn-actions"><form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="' . CSRF_TOKEN . '" value="' . SEC_createToken() . '"><button type="submit" name="run_security_audit" class="ixn-button">' . $LANG_indexnow['cleanup_run'] . '</button></form></div></section>';
 
 $display .= '</div>';
+
+$display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>Geeklog / XMLSitemap integration</h2><p class="ixn-card-subtitle">Keep XMLSitemap for sitemap generation while assigning IndexNow notifications to a single provider.</p></div></div>';
+$display .= '<div class="ixn-coexistence"><div>';
+if (!$xmlsitemap_state['installed']) {
+    $display .= '<div class="ixn-status ixn-ok"><strong>No XMLSitemap overlap detected</strong><div>XMLSitemap is not installed, so this plugin is the only detected IndexNow provider.</div></div>';
+} elseif (!$xmlsitemap_state['enabled']) {
+    $display .= '<div class="ixn-status ixn-ok"><strong>XMLSitemap is disabled</strong><div>No duplicate IndexNow submission can occur while XMLSitemap is disabled.</div></div>';
+} elseif (!$xmlsitemap_state['indexnow_supported']) {
+    $display .= '<div class="ixn-status ixn-ok"><strong>Compatible XMLSitemap configuration</strong><div>This XMLSitemap installation does not expose its own IndexNow setting. The dedicated IndexNow plugin can operate without overlap.</div></div>';
+} elseif ($xmlsitemap_state['conflict']) {
+    $display .= '<div class="ixn-status ixn-warning"><strong>Duplicate IndexNow provider detected</strong><div>XMLSitemap and the dedicated IndexNow plugin are both configured to submit changed URLs. Disable only XMLSitemap\'s IndexNow option to avoid duplicate requests and inconsistent submission history.</div></div>';
+} else {
+    $display .= '<div class="ixn-status ixn-ok"><strong>Recommended coexistence is active</strong><div>XMLSitemap remains enabled for sitemap generation and its IndexNow option is disabled. The dedicated plugin is the single IndexNow notification provider.</div></div>';
+}
+$display .= '<dl class="ixn-details">';
+$display .= '<dt>XMLSitemap</dt><dd>' . ($xmlsitemap_state['installed'] ? 'Installed' : 'Not installed') . ($xmlsitemap_state['version'] !== '' ? ' &mdash; v' . htmlspecialchars($xmlsitemap_state['version'], ENT_QUOTES, 'UTF-8') : '') . '</dd>';
+if ($xmlsitemap_state['installed']) {
+    $display .= '<dt>Plugin state</dt><dd>' . ($xmlsitemap_state['enabled'] ? 'Enabled' : 'Disabled') . '</dd>';
+    $display .= '<dt>Native IndexNow support</dt><dd>' . ($xmlsitemap_state['indexnow_supported'] ? 'Available' : 'Not detected') . '</dd>';
+    if ($xmlsitemap_state['indexnow_supported']) {
+        $display .= '<dt>XMLSitemap IndexNow</dt><dd>' . ($xmlsitemap_state['indexnow_enabled'] ? '<strong>Enabled</strong>' : 'Disabled') . '</dd>';
+    }
+}
+$display .= '</dl></div>';
+$display .= '<aside class="ixn-coexistence-note"><strong>Recommended responsibility split</strong>XMLSitemap should continue generating XML and News sitemaps. This dedicated plugin should handle IndexNow notifications, history, permission checks and security remediation. The IndexNow plugin never changes XMLSitemap settings automatically.</aside></div>';
+if ($xmlsitemap_state['installed'] && $xmlsitemap_state['indexnow_supported']) {
+    $display .= '<div class="ixn-actions"><form class="ixn-config-form" method="post" action="' . htmlspecialchars($config_url, ENT_QUOTES, 'UTF-8') . '"><input type="hidden" name="conf_group" value="xmlsitemap"><button type="submit" class="ixn-config-button">Open XMLSitemap configuration</button></form>';
+    if ($xmlsitemap_state['conflict']) {
+        $display .= '<span class="ixn-muted">Set <strong>Enable IndexNow</strong> to False. Do not disable XMLSitemap itself.</span>';
+    }
+    $display .= '</div>';
+}
+$display .= '</section>';
 
 $display .= '<section class="ixn-card ixn-card-full"><div class="ixn-card-head"><div><h2>' . $LANG_indexnow['manual_submission'] . '</h2><p class="ixn-card-subtitle">Submit public articles in controlled batches of ' . (int) $batch_size . ' URLs.</p></div></div>';
 $display .= '<div class="ixn-manual-row"><div class="ixn-manual-copy"><p><strong>' . sprintf($LANG_indexnow['total_articles'], $total_articles) . '</strong></p>';
