@@ -48,7 +48,7 @@ function plugin_autoinstall_indexnow($pi_name)
         'groups' => $groups,
         'features' => $features,
         'mappings' => $mappings,
-        'tables' => array('indexnow_submissions')
+        'tables' => array('indexnow_submissions', 'indexnow_cleanup')
     );
 }
 
@@ -65,6 +65,10 @@ function plugin_load_configuration_indexnow($pi_name)
 
 function plugin_postinstall_indexnow($pi_name)
 {
+    if (function_exists('indexnow_update_1_2_1')) {
+        return indexnow_update_1_2_1(false);
+    }
+
     return function_exists('indexnow_update_1_2_0')
         ? indexnow_update_1_2_0()
         : true;
