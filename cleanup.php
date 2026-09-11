@@ -13,11 +13,6 @@ if (strpos(strtolower($_SERVER['PHP_SELF']), 'cleanup.php') !== false) {
     die('This file cannot be used on its own!');
 }
 
-/**
- * Return whether the cleanup queue table exists.
- *
- * @return bool
- */
 function indexnow_cleanup_table_exists()
 {
     global $_TABLES;
@@ -32,9 +27,6 @@ function indexnow_cleanup_table_exists()
     return ($result && DB_numRows($result) > 0);
 }
 
-/**
- * Build the current canonical URL for core content without performing a request.
- */
 function indexnow_cleanup_core_url($type, $id)
 {
     global $_CONF;
@@ -57,11 +49,6 @@ function indexnow_cleanup_core_url($type, $id)
     return '';
 }
 
-/**
- * Resolve current anonymous visibility and canonical URL.
- *
- * @return array array('public' => bool, 'url' => string)
- */
 function indexnow_cleanup_visibility($type, $id, $subType = '')
 {
     if ($type === 'article' || $type === 'staticpages' || $type === 'topic') {
@@ -79,10 +66,6 @@ function indexnow_cleanup_visibility($type, $id, $subType = '')
     );
 }
 
-/**
- * Add one already-disclosed URL to the local remediation queue.
- * No network request is performed here.
- */
 function indexnow_cleanup_enqueue($type, $id, $subType, $url, $reason)
 {
     global $_TABLES;
@@ -126,21 +109,17 @@ function indexnow_cleanup_enqueue($type, $id, $subType, $url, $reason)
     return !DB_error();
 }
 
-/**
- * Record an audit run without placing anything in the network queue.
- */
 function indexnow_cleanup_record_audit($audited, $queued, $legacyUnverifiable = false)
 {
-    global $_TABLES;
+    global $_TABLES, $LANG_indexnow;
 
     if (!indexnow_cleanup_table_exists()) {
         return false;
     }
 
-    $message = 'Audited ' . (int) $audited . ' previously successful URL(s); queued ' .
-        (int) $queued . ' remediation URL(s).';
+    $message = sprintf($LANG_indexnow['cleanup_audit_record'], (int) $audited, (int) $queued);
     if ($legacyUnverifiable) {
-        $message .= ' Pre-1.2.0 submissions cannot be reconstructed safely because no submission history existed.';
+        $message .= $LANG_indexnow['cleanup_audit_legacy_append'];
     }
 
     $key = sha1('audit' . microtime(true) . mt_rand());
@@ -163,7 +142,7 @@ function indexnow_cleanup_record_audit($audited, $queued, $legacyUnverifiable = 
                 "INSERT INTO {$_TABLES['indexnow_cleanup']} " .
                 "(cleanup_key,item_type,item_id,item_subtype,url,reason,status,attempts,last_http_code,message,created_at,updated_at,processed_at) VALUES (" .
                 "'" . DB_escapeString($legacyKey) . "','__legacy__','','','','legacy_unverifiable','review',0,0," .
-                "'Pre-1.2.0 submission history is unavailable. No private URL was sent during remediation because prior disclosure cannot be proven safely.',NOW(),NOW(),NULL)"
+                "'" . DB_escapeString($LANG_indexnow['cleanup_legacy_record']) . "',NOW(),NOW(),NULL)"
             );
         }
     }
@@ -171,14 +150,6 @@ function indexnow_cleanup_record_audit($audited, $queued, $legacyUnverifiable = 
     return !DB_error();
 }
 
-/**
- * Audit URLs that history proves were submitted successfully in the past.
- * URLs that are no longer public, or whose canonical URL changed, are queued
- * for a recrawl. Unknown pre-history is never sent to IndexNow.
- *
- * @param bool $legacyUnverifiable true when upgrading from before 1.2.0
- * @return array
- */
 function indexnow_audit_submitted_urls($legacyUnverifiable = false)
 {
     global $_TABLES;
@@ -229,9 +200,6 @@ function indexnow_audit_submitted_urls($legacyUnverifiable = false)
     return $stats;
 }
 
-/**
- * Return cleanup queue and audit statistics for the administration page.
- */
 function indexnow_cleanup_get_stats()
 {
     global $_TABLES;
@@ -266,13 +234,9 @@ function indexnow_cleanup_get_stats()
     return $stats;
 }
 
-/**
- * Process pending remediation URLs in one IndexNow batch.
- * Failed requests are retried up to three times by future scheduled runs.
- */
 function indexnow_process_cleanup_queue($limit = 100)
 {
-    global $_TABLES;
+    global $_TABLES, $LANG_indexnow;
 
     if (!indexnow_cleanup_table_exists()) {
         return 0;
@@ -310,7 +274,7 @@ function indexnow_process_cleanup_queue($limit = 100)
 
         $status = 'pending';
         $httpCode = 0;
-        $message = 'Cleanup submission result was not recorded.';
+        $message = $LANG_indexnow['cleanup_result_missing'];
         if ($history && DB_numRows($history) > 0) {
             $H = DB_fetchArray($history);
             $httpCode = (int) $H['http_code'];
